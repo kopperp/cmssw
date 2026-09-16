@@ -19,23 +19,29 @@
 #include "RecoTracker/PixelTrackFitting/interface/alpaka/CurvilinearToPerigee.h"  // curvilinear -> perigee
 #include "RecoTracker/PixelTrackFitting/interface/BLBFieldMap.h"                  // normalized (Bz,Br) r-z map
 
+// #include "FWCore/MessageLogger/interface/MessageLogger.h"
+#include "Utilities/Cadna/interface/CadnaEigenTypes.h"
+#include "Utilities/Cadna/interface/CadnaOutput.h"
+
 // Measurement model: the hit covariance is projected onto the curvilinear (U,V) offset frame at each node.
 
 namespace ALPAKA_ACCELERATOR_NAMESPACE::generalBrokenLine {
 
   using namespace cms::alpakatools;
 
-  using Matrix5d = Eigen::Matrix<double, 5, 5>;
-  using Matrix3d = Eigen::Matrix<double, 3, 3>;
-  using Matrix2d = Eigen::Matrix<double, 2, 2>;
-  using Matrix23d = Eigen::Matrix<double, 2, 3>;
-  using Vector5d = Eigen::Matrix<double, 5, 1>;
-  using Vector3d = Eigen::Vector3d;
-  using Vector2d = Eigen::Vector2d;
+  using Matrix5d = Eigen::Matrix<double_st, 5, 5>;
+  using Matrix3d = Eigen::Matrix<double_st, 3, 3>;
+  using Matrix2d = Eigen::Matrix<double_st, 2, 2>;
+  using Matrix23d = Eigen::Matrix<double_st, 2, 3>;
+  using Vector5d = Eigen::Matrix<double_st, 5, 1>;
+  // using Vector3d = Eigen::Vector3d;
+  // using Vector2d = Eigen::Vector2d;
+  using Vector3d = Eigen::Vector<double_st, 3>;
+  using Vector2d = Eigen::Vector<double_st, 2>;
 
   // ---- explicit small inverses (device-friendly; the Jacobian blocks are general, not SPD) ----
   ALPAKA_FN_ACC ALPAKA_FN_INLINE Matrix2d inv2(const Matrix2d& m) {
-    const double idet = 1. / (m(0, 0) * m(1, 1) - m(0, 1) * m(1, 0));
+    const double_st idet = 1. / (m(0, 0) * m(1, 1) - m(0, 1) * m(1, 0));
     Matrix2d r;
     r(0, 0) = m(1, 1) * idet;
     r(0, 1) = -m(0, 1) * idet;
@@ -44,11 +50,11 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::generalBrokenLine {
     return r;
   }
   ALPAKA_FN_ACC ALPAKA_FN_INLINE Matrix3d inv3(const Matrix3d& m) {
-    const double a = m(0, 0), b = m(0, 1), c = m(0, 2);
-    const double d = m(1, 0), e = m(1, 1), f = m(1, 2);
-    const double g = m(2, 0), h = m(2, 1), i = m(2, 2);
-    const double A = e * i - f * h, B = f * g - d * i, C = d * h - e * g;
-    const double idet = 1. / (a * A + b * B + c * C);
+    const double_st a = m(0, 0), b = m(0, 1), c = m(0, 2);
+    const double_st d = m(1, 0), e = m(1, 1), f = m(1, 2);
+    const double_st g = m(2, 0), h = m(2, 1), i = m(2, 2);
+    const double_st A = e * i - f * h, B = f * g - d * i, C = d * h - e * g;
+    const double_st idet = 1. / (a * A + b * B + c * C);
     Matrix3d r;
     r(0, 0) = A * idet;
     r(0, 1) = (c * h - b * i) * idet;
@@ -69,40 +75,40 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::generalBrokenLine {
                                                               const Vector3d& p1,
                                                               const Vector3d& p2,
                                                               const Vector3d& dx,
-                                                              double qbp,
+                                                              double_st qbp,
                                                               const Vector3d& hInvGeV,
-                                                              double s) {
+                                                              double_st s) {
     Matrix5d J = Matrix5d::Identity();
 
-    const double t11 = p1.x(), t12 = p1.y(), t13 = p1.z();
-    const double t21 = p2.x(), t22 = p2.y(), t23 = p2.z();
-    const double cosl0 = alpaka::math::sqrt(acc, t11 * t11 + t12 * t12);
-    const double cosl1 = 1. / alpaka::math::sqrt(acc, t21 * t21 + t22 * t22);
+    const double_st t11 = p1.x(), t12 = p1.y(), t13 = p1.z();
+    const double_st t21 = p2.x(), t22 = p2.y(), t23 = p2.z();
+    const double_st cosl0 = alpaka::math::sqrt(acc, t11 * t11 + t12 * t12);
+    const double_st cosl1 = 1. / alpaka::math::sqrt(acc, t21 * t21 + t22 * t22);
 
-    const double hmag = alpaka::math::sqrt(acc, hInvGeV.squaredNorm());
+    const double_st hmag = alpaka::math::sqrt(acc, hInvGeV.squaredNorm());
     const Vector3d hn = hInvGeV / hmag;
-    const double qp = -hmag;
-    const double q = qp * qbp;
-    const double theta = q * s;
-    const double sint = alpaka::math::sin(acc, theta), cost = alpaka::math::cos(acc, theta);
-    const double hn1 = hn.x(), hn2 = hn.y(), hn3 = hn.z();
-    const double dx1 = dx.x(), dx2 = dx.y(), dx3 = dx.z();
-    const double gamma = hn1 * t21 + hn2 * t22 + hn3 * t23;
-    const double an1 = hn2 * t23 - hn3 * t22;
-    const double an2 = hn3 * t21 - hn1 * t23;
-    const double an3 = hn1 * t22 - hn2 * t21;
-    double au = 1. / alpaka::math::sqrt(acc, t11 * t11 + t12 * t12);
-    const double u11 = -au * t12, u12 = au * t11;
-    const double v11 = -t13 * u12, v12 = t13 * u11, v13 = t11 * u12 - t12 * u11;
+    const double_st qp = -hmag;
+    const double_st q = qp * qbp;
+    const double_st theta = q * s;
+    const double_st sint = alpaka::math::sin(acc, theta), cost = alpaka::math::cos(acc, theta);
+    const double_st hn1 = hn.x(), hn2 = hn.y(), hn3 = hn.z();
+    const double_st dx1 = dx.x(), dx2 = dx.y(), dx3 = dx.z();
+    const double_st gamma = hn1 * t21 + hn2 * t22 + hn3 * t23;
+    const double_st an1 = hn2 * t23 - hn3 * t22;
+    const double_st an2 = hn3 * t21 - hn1 * t23;
+    const double_st an3 = hn1 * t22 - hn2 * t21;
+    double_st au = 1. / alpaka::math::sqrt(acc, t11 * t11 + t12 * t12);
+    const double_st u11 = -au * t12, u12 = au * t11;
+    const double_st v11 = -t13 * u12, v12 = t13 * u11, v13 = t11 * u12 - t12 * u11;
     au = 1. / alpaka::math::sqrt(acc, t21 * t21 + t22 * t22);
-    const double u21 = -au * t22, u22 = au * t21;
-    const double v21 = -t23 * u22, v22 = t23 * u21, v23 = t21 * u22 - t22 * u21;
-    const double anv = -(hn1 * u21 + hn2 * u22);
-    const double anu = (hn1 * v21 + hn2 * v22 + hn3 * v23);
-    const double omcost = 1. - cost, tmsint = theta - sint;
+    const double_st u21 = -au * t22, u22 = au * t21;
+    const double_st v21 = -t23 * u22, v22 = t23 * u21, v23 = t21 * u22 - t22 * u21;
+    const double_st anv = -(hn1 * u21 + hn2 * u22);
+    const double_st anu = (hn1 * v21 + hn2 * v22 + hn3 * v23);
+    const double_st omcost = 1. - cost, tmsint = theta - sint;
 
-    const double hu1 = -hn3 * u12, hu2 = hn3 * u11, hu3 = hn1 * u12 - hn2 * u11;
-    const double hv1 = hn2 * v13 - hn3 * v12, hv2 = hn3 * v11 - hn1 * v13, hv3 = hn1 * v12 - hn2 * v11;
+    const double_st hu1 = -hn3 * u12, hu2 = hn3 * u11, hu3 = hn1 * u12 - hn2 * u11;
+    const double_st hv1 = hn2 * v13 - hn3 * v12, hv2 = hn3 * v11 - hn1 * v13, hv3 = hn1 * v12 - hn2 * v11;
 
     // row 1 (lambda)
     J(1, 0) = -qp * anv * (t21 * dx1 + t22 * dx2 + t23 * dx3);
@@ -134,35 +140,35 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::generalBrokenLine {
     J(2, 4) = -q * anu * (v11 * t21 + v12 * t22 + v13 * t23) * cosl1;
 
     // rows 3,4 col 0 (x_T, y_T vs 1/p)
-    const double cutCriterion = alpaka::math::abs(acc, s * qbp);
-    const double limit = 5.;
+    const double_st cutCriterion = alpaka::math::abs(acc, s * qbp);
+    const double_st limit = 5.;
     if (cutCriterion > limit) {
-      const double pp = 1. / qbp;
+      const double_st pp = 1. / qbp;
       J(3, 0) = pp * (u21 * dx1 + u22 * dx2);
       J(4, 0) = pp * (v21 * dx1 + v22 * dx2 + v23 * dx3);
     } else {
-      const double hp11 = hn2 * t13 - hn3 * t12;
-      const double hp12 = hn3 * t11 - hn1 * t13;
-      const double hp13 = hn1 * t12 - hn2 * t11;
-      const double temp1 = hp11 * u21 + hp12 * u22;
-      const double s2 = s * s;
-      const double secondOrder41 = 0.5 * qp * temp1 * s2;
-      const double ghnmp1 = gamma * hn1 - t11;
-      const double ghnmp2 = gamma * hn2 - t12;
-      const double ghnmp3 = gamma * hn3 - t13;
-      const double temp2 = ghnmp1 * u21 + ghnmp2 * u22;
-      const double s3 = s2 * s, s4 = s3 * s;
-      const double h1 = hmag, h2 = h1 * h1, h3 = h2 * h1;
-      const double qbp2 = qbp * qbp;
-      const double thirdOrder41 = (1. / 3) * h2 * s3 * qbp * temp2;
-      const double fourthOrder41 = (1. / 8) * h3 * s4 * qbp2 * temp1;
+      const double_st hp11 = hn2 * t13 - hn3 * t12;
+      const double_st hp12 = hn3 * t11 - hn1 * t13;
+      const double_st hp13 = hn1 * t12 - hn2 * t11;
+      const double_st temp1 = hp11 * u21 + hp12 * u22;
+      const double_st s2 = s * s;
+      const double_st secondOrder41 = 0.5 * qp * temp1 * s2;
+      const double_st ghnmp1 = gamma * hn1 - t11;
+      const double_st ghnmp2 = gamma * hn2 - t12;
+      const double_st ghnmp3 = gamma * hn3 - t13;
+      const double_st temp2 = ghnmp1 * u21 + ghnmp2 * u22;
+      const double_st s3 = s2 * s, s4 = s3 * s;
+      const double_st h1 = hmag, h2 = h1 * h1, h3 = h2 * h1;
+      const double_st qbp2 = qbp * qbp;
+      const double_st thirdOrder41 = (1. / 3) * h2 * s3 * qbp * temp2;
+      const double_st fourthOrder41 = (1. / 8) * h3 * s4 * qbp2 * temp1;
       J(3, 0) = secondOrder41 + (thirdOrder41 + fourthOrder41);
 
-      const double temp3 = hp11 * v21 + hp12 * v22 + hp13 * v23;
-      const double secondOrder51 = 0.5 * qp * temp3 * s2;
-      const double temp4 = ghnmp1 * v21 + ghnmp2 * v22 + ghnmp3 * v23;
-      const double thirdOrder51 = (1. / 3) * h2 * s3 * qbp * temp4;
-      const double fourthOrder51 = (1. / 8) * h3 * s4 * qbp2 * temp3;
+      const double_st temp3 = hp11 * v21 + hp12 * v22 + hp13 * v23;
+      const double_st secondOrder51 = 0.5 * qp * temp3 * s2;
+      const double_st temp4 = ghnmp1 * v21 + ghnmp2 * v22 + ghnmp3 * v23;
+      const double_st thirdOrder51 = (1. / 3) * h2 * s3 * qbp * temp4;
+      const double_st fourthOrder51 = (1. / 8) * h3 * s4 * qbp2 * temp3;
       J(4, 0) = secondOrder51 + (thirdOrder51 + fourthOrder51);
     }
 
@@ -198,7 +204,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::generalBrokenLine {
   }
   ALPAKA_FN_ACC ALPAKA_FN_INLINE void prevDerivatives(const Matrix5d& jac, Matrix2d& W, Matrix2d& WJ, Vector2d& Wd) {
     const Matrix3d A33 = jac.block<3, 3>(0, 0);
-    const Eigen::Matrix<double, 3, 2> B32 = jac.block<3, 2>(0, 3);
+    const Eigen::Matrix<double_st, 3, 2> B32 = jac.block<3, 2>(0, 3);
     const Matrix23d C23 = jac.block<2, 3>(3, 0);
     const Matrix2d D22 = jac.block<2, 2>(3, 3);
     const Matrix23d CA = C23 * inv3(A33);
@@ -253,7 +259,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::generalBrokenLine {
   // MS and is accurate to the few-% level of the correction itself. cf. the host implementation of
   // elossMostProbable.
   template <typename TAcc>
-  ALPAKA_FN_ACC ALPAKA_FN_INLINE double elossMostProbable(const TAcc& acc, double p, double xx0) {
+  ALPAKA_FN_ACC ALPAKA_FN_INLINE double_st elossMostProbable(const TAcc& acc, double_st p, double_st xx0) {
     // Ionization medium and kinematic constants: elossMedium above, the single definition point.
     // This function is heavily inlined and its floating-point association depends on how the source
     // is written, so an edit to the expressions below can move the last bits of every fitted momentum.
@@ -266,18 +272,18 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::generalBrokenLine {
     constexpr double hwp = elossMedium::kHwp;
     if (xx0 <= 0.)
       return 0.;
-    const double E = alpaka::math::sqrt(acc, p * p + m * m);
-    const double beta2 = p * p / (E * E);
-    const double g = E / m;
-    const double bg2 = beta2 * g * g;
-    const double xi = 0.5 * K * Z_A * (xx0 * X0g) / beta2;
+    const double_st E = alpaka::math::sqrt(acc, p * p + m * m);
+    const double_st beta2 = p * p / (E * E);
+    const double_st g = E / m;
+    const double_st bg2 = beta2 * g * g;
+    const double_st xi = 0.5 * K * Z_A * (xx0 * X0g) / beta2;
     // density effect, high-betagamma Sternheimer limit: delta -> 2 ln(hwp/I * betagamma) - 1 (>=0)
-    const double dhalf = alpaka::math::log(acc, (hwp / I) * alpaka::math::sqrt(acc, bg2)) - 0.5;
-    const double delta = dhalf > 0. ? 2. * dhalf : 0.;
-    const double bracket =
+    const double_st dhalf = alpaka::math::log(acc, (hwp / I) * alpaka::math::sqrt(acc, bg2)) - 0.5;
+    const double_st delta = dhalf > 0. ? 2. * dhalf : static_cast<double_st>(0.);
+    const double_st bracket =
         alpaka::math::log(acc, 2. * me * bg2 / I) + alpaka::math::log(acc, xi / I) + 0.2 - beta2 - delta;
-    const double dmp = xi * bracket;
-    return dmp > 0. ? dmp : 0.;
+    const double_st dmp = xi * bracket;
+    return dmp > 0. ? dmp : static_cast<double_st>(0.);
   }
 
   // Typical (MEDIAN) ionization loss [GeV] of the CUMULATIVE charged column of thickness xx0 [X/X0], same
@@ -290,7 +296,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::generalBrokenLine {
   //      and median - mode = (1.35578 + 0.22278) xi for a Landau (Koelbig-Schorr values; PDG RPP 34.2.9).
   // Callers charge per-node increments T(X_cum + x_lump) - T(X_cum), which preserves the walk's lump placement.
   template <typename TAcc>
-  ALPAKA_FN_ACC ALPAKA_FN_INLINE double elossTypicalColumn(const TAcc& acc, double p, double xx0) {
+  ALPAKA_FN_ACC ALPAKA_FN_INLINE double_st elossTypicalColumn(const TAcc& acc, double_st p, double_st xx0) {
     // Same medium and kinematic constants as elossMostProbable: elossMedium above.
     constexpr double m = elossMedium::kPionMass;
     constexpr double me = elossMedium::kElectronMass;
@@ -302,17 +308,17 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::generalBrokenLine {
     constexpr double kLandauMedianMinusMode = elossMedium::kLandauMedianMinusMode;
     if (xx0 <= 0.)
       return 0.;
-    const double E = alpaka::math::sqrt(acc, p * p + m * m);
-    const double beta2 = p * p / (E * E);
-    const double g = E / m;
-    const double bg2 = beta2 * g * g;
-    const double xi = 0.5 * K * Z_A * (xx0 * X0g) / beta2;
-    const double dhalf = alpaka::math::log(acc, (hwp / I) * alpaka::math::sqrt(acc, bg2)) - 0.5;
-    const double delta = dhalf > 0. ? 2. * dhalf : 0.;
-    const double bracket =
+    const double_st E = alpaka::math::sqrt(acc, p * p + m * m);
+    const double_st beta2 = p * p / (E * E);
+    const double_st g = E / m;
+    const double_st bg2 = beta2 * g * g;
+    const double_st xi = 0.5 * K * Z_A * (xx0 * X0g) / beta2;
+    const double_st dhalf = alpaka::math::log(acc, (hwp / I) * alpaka::math::sqrt(acc, bg2)) - 0.5;
+    const double_st delta = dhalf > 0. ? 2. * dhalf : static_cast<double_st>(0.);
+    const double_st bracket =
         alpaka::math::log(acc, 2. * me * bg2 / I) + alpaka::math::log(acc, xi / I) + 0.2 - beta2 - delta;
-    const double dmp = xi * bracket;
-    return (dmp > 0. ? dmp : 0.) + kLandauMedianMinusMode * xi;
+    const double_st dmp = xi * bracket;
+    return (dmp > 0. ? dmp : static_cast<double_st>(0.)) + kLandauMedianMinusMode * xi;
   }
 
   // Assemble the per-node GBL inputs on device (alpaka::math + inv2/inv3); cf. the host prepareGblData for the
@@ -329,26 +335,26 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::generalBrokenLine {
       const M3xN& hits,
       const M6xN& hits_ge,
       const V4& fast_fit,
-      double bField,
+      double_st bField,
       int qCharge,
       const VN& sTransverse,
       const VN& sTotal,
       const VN& matXX0,
-      double innerXX0,
+      double_st innerXX0,
       GblNodeData* nodes,
-      double msScale = 1.0,  // multiple-scattering scale (1.0 in production)
+      double_st msScale = 1.0,  // multiple-scattering scale (1.0 in production)
       // Enables the ionization-loss correction when > 0. Only that test is read: the loss charged at a node
       // comes from elossMostProbable / elossTypicalColumn at that node's thickness, not from this value.
-      double eLossPerX0 = 0.0,
+      double_st eLossPerX0 = 0.0,
       Matrix5d* jacHit0ToPca = nullptr,  // optional out: hit0->PCA backward jacobian (single-scatterer layout)
-      double innerD1 = 0.,               // upstream equivalent-scatterer path distance from hit0 [cm]
-      double innerW1 = 0.,               // fraction of the upstream scattering variance at that node
+      double_st innerD1 = 0.,               // upstream equivalent-scatterer path distance from hit0 [cm]
+      double_st innerW1 = 0.,               // fraction of the upstream scattering variance at that node
       bool* usedInnerNode = nullptr,
       // Normalized (Bz,Br) r-z field map + the origin field it normalizes to. With a map, every segment is
       // charged the deterministic azimuth (and, under trajectoryCorrections, lambda) excess of the real field
       // profile over the single constant the fit models; with a null map nothing is accumulated.
       const float* bMap = nullptr,
-      double bFieldOrigin = 0.,
+      double_st bFieldOrigin = 0.,
       // Reference-trajectory corrections: the node-0 path length seeded with sin(lambda)*z0 rather than 0, the
       // arc->azimuth rotation sign that places a measurement-less node, and the B_r lambda row of the
       // field-profile offset. Off, node 0's path length is seeded with 0, the rotation takes the opposite
@@ -362,34 +368,34 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::generalBrokenLine {
       // (elossMostProbable). Producer parameter useCumulativeEloss.
       bool elossCumulative = false) {
     constexpr int nNodes = N + 2;
-    const double cx = fast_fit(0), cy = fast_fit(1), R = fast_fit(2);
-    const double slope = -double(qCharge) / fast_fit(3);
-    const double pt = bField * R;
-    const double sec2 = 1. + slope * slope;
-    const double pTot = pt * alpaka::math::sqrt(acc, sec2);
-    const double cos2lam = 1. / sec2;
-    const double qbp = double(qCharge) / pTot;
+    const double_st cx = fast_fit(0), cy = fast_fit(1), R = fast_fit(2);
+    const double_st slope = -static_cast<double_st>(qCharge) / fast_fit(3);
+    const double_st pt = bField * R;
+    const double_st sec2 = 1. + slope * slope;
+    const double_st pTot = pt * alpaka::math::sqrt(acc, sec2);
+    const double_st cos2lam = 1. / sec2;
+    const double_st qbp = static_cast<double_st>(qCharge) / pTot;
     const Vector3d hInvGeV(0., 0., bField);
-    const double invn = 1. / alpaka::math::sqrt(acc, sec2);
+    const double_st invn = 1. / alpaka::math::sqrt(acc, sec2);
     // signed charge that turns a transverse arc into a rotation of the radius vector about the fitted
     // centre; see the reference-helix point below.
-    const double qArc = trajectoryCorrections ? -double(qCharge) : double(qCharge);
+    const double_st qArc = trajectoryCorrections ? -static_cast<double_st>(qCharge) : static_cast<double_st>(qCharge);
 
     // pos/dir rolling window: the per-node loop below only ever reads node k-1 and node k, so carry
     // just the previous node (posPrev/dirPrev) instead of materializing pos[nNodes]/dir[nNodes]
     // arrays, which keeps them in registers and off the kernel stack frame.
-    const double cmag = alpaka::math::sqrt(acc, cx * cx + cy * cy);
-    auto computeNode = [&](double x, double y, double z, Vector3d& p, Vector3d& d) {
+    const double_st cmag = alpaka::math::sqrt(acc, cx * cx + cy * cy);
+    auto computeNode = [&](double_st x, double_st y, double_st z, Vector3d& p, Vector3d& d) {
       p = Vector3d(x, y, z);
-      const double rx = (x - cx) / R, ry = (y - cy) / R;
+      const double_st rx = (x - cx) / R, ry = (y - cy) / R;
       // physical FORWARD momentum tangent: it points along the direction of motion through the hits. The
       // opposite sign is harmless for the (direction-invariant) covariance but flips phi and the d0 sign in
       // the perigee VALUE.
-      const double tx = double(qCharge) * ry, ty = -double(qCharge) * rx;
+      const double_st tx = static_cast<double_st>(qCharge) * ry, ty = -static_cast<double_st>(qCharge) * rx;
       d = Vector3d(tx * invn, ty * invn, slope * invn);
     };
-    const double sT0 = double(sTransverse(0));
-    const double z0 = hits(2, 0) - slope * sT0;  // line: z = z0 + slope * sTransverse
+    const double_st sT0 = static_cast<double_st>(sTransverse(0));
+    const double_st z0 = hits(2, 0) - slope * sT0;  // line: z = z0 + slope * sTransverse
     // inner-node layout only when the equivalent scatterer lands strictly between the PCA and hit0
     const bool useInner = innerXX0 > 0. && innerW1 > 0. && innerW1 < 1. && sT0 > 0.;
     const int hOff = useInner ? 2 : 1;  // node index of hit0
@@ -404,46 +410,46 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::generalBrokenLine {
     Vector3d posH0 = Vector3d::Zero(), dirH0 = Vector3d::Zero();
 
     nodes[0] = GblNodeData{};
-    double sTotN[nNodes];
+    double_st sTotN[nNodes];
     // node 0 is the PCA of the reference helix, and sTotal is the path length in the (s,z) frame rotated by
     // lambda: sTotal(i) = cos(lambda)*sTransverse(i) + sin(lambda)*z(i). At sTransverse = 0 that is
     // sin(lambda)*z0, not zero; seeding node 0 with 0 instead makes the PCA -> node-1 step -- and only that
     // step, the constant cancelling in every later difference -- disagree with the arc the same nodes'
     // geometry implies.
-    sTotN[0] = trajectoryCorrections ? slope * invn * z0 : 0.;
+    sTotN[0] = trajectoryCorrections ? slope * invn * z0 : static_cast<double_st>(0.);
     if (useInner)
-      sTotN[1] = double(sTotal(0)) - innerD1;  // path length along the track
+      sTotN[1] = static_cast<double_st>(sTotal(0)) - innerD1;  // path length along the track
     for (int i = 0; i < N; ++i)
-      sTotN[i + hOff] = double(sTotal(i));
+      sTotN[i + hOff] = static_cast<double_st>(sTotal(i));
     // Total declared material of THIS layout's gap set: the upstream lump plus every inter-hit gap that gets a
     // kink (the outermost hit carries none). Only read under scatteringLogAtTotal (see th2Of); left at 0
     // otherwise, which the lambda never reads.
-    double xx0TotDecl = 0.;
+    double_st xx0TotDecl = 0.;
     if (scatteringLogAtTotal) {
       if (innerXX0 > 0.)
         xx0TotDecl += innerXX0;
       for (int i = 1; i <= N - 2; ++i)
-        if (double(matXX0(i - 1)) > 0.)
-          xx0TotDecl += double(matXX0(i - 1));
+        if (static_cast<double_st>(matXX0(i - 1)) > 0.)
+          xx0TotDecl += static_cast<double_st>(matXX0(i - 1));
     }
     // Highland scattering variance (pion 1/beta factor, matches CMSSW MultipleScatteringUpdator). theta0^2 is not
     // additive over a chain, so under scatteringLogAtTotal the ARGUMENT OF THE LOG is the track's total declared
     // thickness while the leading xx0 keeps each gap's share; nothing else changes. th2Of is the hottest
     // floating-point lambda of the node builder: how its expression is written fixes the association its
     // inlined callers get, so an edit here can move the last bits of the fit.
-    auto th2Of = [&](double xx0) {
+    auto th2Of = [&](double_st xx0) {
       if (xx0 <= 0.)
-        return 0.;
+        return static_cast<double_st>(0.);
       constexpr double mPi = 0.13957;  // pion mass [GeV]
-      const double betaP = pTot * pTot / alpaka::math::sqrt(acc, pTot * pTot + mPi * mPi);
-      const double tt = 0.0136 / betaP;
-      const double xLog = (scatteringLogAtTotal && xx0TotDecl > 0.) ? xx0TotDecl : xx0;
-      const double f = 1. + 0.038 * alpaka::math::log(acc, xLog);
-      return tt * tt * xx0 * f * f * msScale;
+      const double_st betaP = pTot * pTot / alpaka::math::sqrt(acc, pTot * pTot + mPi * mPi);
+      const double_st tt = 0.0136 / betaP;
+      const double_st xLog = (scatteringLogAtTotal && xx0TotDecl > 0.) ? xx0TotDecl : xx0;
+      const double_st f = 1. + 0.038 * alpaka::math::log(acc, xLog);
+      return static_cast<double_st>(tt * tt * xx0 * f * f * msScale);
     };
     // total upstream scattering variance from the FULL innerXX0 (log term of the total), split linearly
     // between the equivalent scatterer node (innerW1) and hit0 (1-innerW1) in the inner-node layout.
-    const double th2InnerTot = th2Of(innerXX0);
+    const double_st th2InnerTot = th2Of(innerXX0);
     // running deterministic curvilinear state shift, accumulated PCA -> node k. It carries two terms that
     // share one accumulator because they are both deterministic offsets of the same reference state,
     // propagated by the same Jacobians and removed at the same place: the dE/dx q/p increment (slot 0)
@@ -456,33 +462,33 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::generalBrokenLine {
     // B_bend/Bz(0,0) at a node, the same local law the effective field averages: the reference circle's
     // tanLambda*cos(alpha) carries q^2, so this is charge-free.
     auto bBendOf = [&](const Vector3d& p) {
-      const double r = alpaka::math::sqrt(acc, p.x() * p.x() + p.y() * p.y());
-      const double den = fast_fit(3) * alpaka::math::abs(acc, R) * r;
-      const double tlca = (den != 0.) ? -(cx * p.y() - cy * p.x()) / den : 0.;
+      const double_st r = alpaka::math::sqrt(acc, p.x() * p.x() + p.y() * p.y());
+      const double_st den = fast_fit(3) * alpaka::math::abs(acc, R) * r;
+      const double_st tlca = (den != 0.) ? -(cx * p.y() - cy * p.x()) / den : static_cast<double_st>(0.);
       return blBFieldMap::bBendAt(bMap, r, p.z(), tlca);
     };
     // The same law, plus B_r/Bz(0,0) times sin(alpha) (the lambda row's shape, charge-ODD unlike the bending
     // term) from the SAME lattice cell, so the radial component costs one extra bilinear. alpha is the angle
     // from the position azimuth to the momentum azimuth; its sine is the partner of the cosine folded into
     // tlca (cos^2 + sin^2 = 1 on the reference circle). Only called on the lambda-row path.
-    auto bBendBrOf = [&](const Vector3d& p, double& brSinAlpha) {
-      const double r = alpaka::math::sqrt(acc, p.x() * p.x() + p.y() * p.y());
-      const double den = fast_fit(3) * alpaka::math::abs(acc, R) * r;
-      const double tlca = (den != 0.) ? -(cx * p.y() - cy * p.x()) / den : 0.;
-      double brNorm = 0.;
-      const double bb = blBFieldMap::bBendAndBrAt(bMap, r, p.z(), tlca, brNorm);
-      const double sinA =
-          (r > 0. && R != 0.) ? -double(qCharge) * (p.x() * (p.x() - cx) + p.y() * (p.y() - cy)) / (R * r) : 0.;
+    auto bBendBrOf = [&](const Vector3d& p, double_st& brSinAlpha) {
+      const double_st r = alpaka::math::sqrt(acc, p.x() * p.x() + p.y() * p.y());
+      const double_st den = fast_fit(3) * alpaka::math::abs(acc, R) * r;
+      const double_st tlca = (den != 0.) ? -(cx * p.y() - cy * p.x()) / den : static_cast<double_st>(0.);
+      double brNorm = 0.;  // INFO: CADNA needs to stay double
+      const double_st bb = blBFieldMap::bBendAndBrAt(bMap, r, p.z(), tlca, brNorm);
+      const double_st sinA =
+          (r > 0. && R != 0.) ? -static_cast<double_st>(qCharge) * (p.x() * (p.x() - cx) + p.y() * (p.y() - cy)) / (R * r) : static_cast<double_st>(0.);
       brSinAlpha = brNorm * sinA;
       return bb;
     };
-    double bbPrev = 0.;
-    double bsPrev = 0.;
+    double_st bbPrev = 0.;
+    double_st bsPrev = 0.;
     if (useField)
-      bbPrev = useLambdaRow ? bBendBrOf(posPrev, bsPrev) : bBendOf(posPrev);
+      bbPrev = useLambdaRow ? static_cast<double_st>(bBendBrOf(posPrev, bsPrev)) : static_cast<double_st>(bBendOf(posPrev));
     Vector5d Deloss = Vector5d::Zero();
     // running charged column [X/X0] for the cumulative typical-loss law (walk order = path order)
-    double xx0ElossCum = 0.;
+    double_st xx0ElossCum = 0.;
     for (int k = 1; k < N + hOff; ++k) {
       const int i = k - hOff;                    // hit index (negative for the scatterer-only node)
       const bool scatOnly = useInner && k == 1;  // upstream-material node: no measurement
@@ -491,15 +497,15 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::generalBrokenLine {
         // equivalent upstream scatterer on the reference helix, at transverse arc sTA from the PCA;
         // clamped strictly between the PCA and hit0 (approximate moments at the edges beat a
         // discontinuous fallback to the angle-only model)
-        double sTA = sT0 - innerD1 * invn;
+        double_st sTA = sT0 - innerD1 * invn;
         sTA = sTA < 0.02 * sT0 ? 0.02 * sT0 : (sTA > 0.98 * sT0 ? 0.98 * sT0 : sTA);
         // rotation of the PCA radius vector over the transverse arc sTA. The reference circle advances its
         // azimuth at dpsi/dsTransverse = -q/R -- the convention sTransverse itself carries and the one the
         // transport Jacobians are built in -- so the rotation is -q*sTA/R; +q*sTA/R mirrors the node about
         // the PCA radius, leaving its z right and its x,y at the reflected arc.
-        const double phiA = qArc * sTA / R;
-        const double ex = cx * (1. - R / cmag) - cx, ey = cy * (1. - R / cmag) - cy;
-        const double ca = alpaka::math::cos(acc, phiA), sa = alpaka::math::sin(acc, phiA);
+        const double_st phiA = qArc * sTA / R;
+        const double_st ex = cx * (1. - R / cmag) - cx, ey = cy * (1. - R / cmag) - cy;
+        const double_st ca = alpaka::math::cos(acc, phiA), sa = alpaka::math::sin(acc, phiA);
         computeNode(cx + ex * ca - ey * sa, cy + ex * sa + ey * ca, z0 + slope * sTA, posCur, dirCur);
       } else {
         computeNode(hits(0, i), hits(1, i), hits(2, i), posCur, dirCur);
@@ -512,11 +518,11 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::generalBrokenLine {
         // azimuth over the segment is therefore -qbp*(B_bend_seg - bField)*ds with ds the 3D path length --
         // the same length the Jacobian above transports over. Half is charged at the departure node and half
         // at the arrival node, so the offset the excess builds up INSIDE the segment is carried too.
-        double dPhiHalf = 0.;
-        double dLamHalf = 0.;
+        double_st dPhiHalf = 0.;
+        double_st dLamHalf = 0.;
         if (useField) {
-          double bsCur = 0.;
-          const double bbCur = useLambdaRow ? bBendBrOf(posCur, bsCur) : bBendOf(posCur);
+          double_st bsCur = 0.;
+          const double_st bbCur = useLambdaRow ? static_cast<double_st>(bBendBrOf(posCur, bsCur)) : static_cast<double_st>(bBendOf(posCur));
           dPhiHalf = -0.5 * qbp * (bFieldOrigin * 0.5 * (bbPrev + bbCur) - bField) * (sTotN[k] - sTotN[k - 1]);
           // Same equation of motion, the OTHER curvilinear slope row: dlambda/ds = -q/|p| * B_r * sin(alpha).
           // A field model with only B_z produces it as identically zero, so unlike the azimuth row above there
@@ -541,7 +547,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::generalBrokenLine {
         nd.scatPrec << 1. / (innerW1 * th2InnerTot), 0., 0., cos2lam / (innerW1 * th2InnerTot);
         nd.hasScat = true;
         if (eLossPerX0 > 0. && elossCumulative) {
-          const double tPrev = elossTypicalColumn(acc, pTot, xx0ElossCum);
+          const double_st tPrev = elossTypicalColumn(acc, pTot, xx0ElossCum);
           xx0ElossCum += innerXX0 * innerW1;
           Deloss(0) += qbp * (elossTypicalColumn(acc, pTot, xx0ElossCum) - tPrev) / pTot;
         } else if (eLossPerX0 > 0.)
@@ -554,22 +560,29 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::generalBrokenLine {
 
       // measurement: curvilinear (U = Z x T, V = T x U) frame from the unit momentum.
       const Vector3d T = dirCur;
-      const double un = 1. / alpaka::math::sqrt(acc, T.x() * T.x() + T.y() * T.y());
+      const double_st un = 1. / alpaka::math::sqrt(acc, T.x() * T.x() + T.y() * T.y());
       const Vector3d U(-T.y() * un, T.x() * un, 0.);
       const Vector3d V(-T.z() * U.y(), T.z() * U.x(), T.x() * U.y() - T.y() * U.x());  // T x U
       Matrix23d Ruv;
       Ruv.row(0) = U.transpose();
       Ruv.row(1) = V.transpose();
       Matrix3d ge3;
-      ge3 << hits_ge(0, i), hits_ge(1, i), hits_ge(3, i), hits_ge(1, i), hits_ge(2, i), hits_ge(4, i), hits_ge(3, i),
-          hits_ge(4, i), hits_ge(5, i);
+      ge3 << static_cast<double_st>(hits_ge(0, i)),
+             static_cast<double_st>(hits_ge(1, i)),
+             static_cast<double_st>(hits_ge(3, i)),
+             static_cast<double_st>(hits_ge(1, i)),
+             static_cast<double_st>(hits_ge(2, i)),
+             static_cast<double_st>(hits_ge(4, i)),
+             static_cast<double_st>(hits_ge(3, i)),
+             static_cast<double_st>(hits_ge(4, i)),
+             static_cast<double_st>(hits_ge(5, i));
       // residual: measured hit minus the fast-fit reference helix (closest circle point in the bending plane,
       // z = z0 + slope*sTransverse longitudinally). Drives the corrections (the fit VALUE).
-      const double dvx = hits(0, i) - cx, dvy = hits(1, i) - cy;
-      const double dmag = alpaka::math::sqrt(acc, dvx * dvx + dvy * dvy);
+      const double_st dvx = hits(0, i) - cx, dvy = hits(1, i) - cy;
+      const double_st dmag = alpaka::math::sqrt(acc, dvx * dvx + dvy * dvy);
       const Vector3d residual3(hits(0, i) - (cx + R * dvx / dmag),
                                hits(1, i) - (cy + R * dvy / dmag),
-                               hits(2, i) - (z0 + slope * double(sTransverse(i))));
+                               hits(2, i) - (z0 + slope * static_cast<double_st>(sTransverse(i))));
       // Measurement precision and residual in the curvilinear (U, V) offset frame: project the global hit
       // covariance ge3 onto (U, V) and invert.
       nd.measPrec = inv2(Ruv * ge3 * Ruv.transpose());
@@ -584,13 +597,13 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::generalBrokenLine {
 
       // one thin scatterer per segment (the upstream remainder -> hit 0, matXX0(i-1) -> inner hits). One kink per
       // segment is the correct count; no both-adjacent double-count, no ghost planes in the material-free OT gaps.
-      double th2 = 0.;
-      double xx0Eloss = 0.;
+      double_st th2 = 0.;
+      double_st xx0Eloss = 0.;
       if (i == 0) {
-        th2 = (useInner ? (1. - innerW1) : 1.) * th2InnerTot;  // linear split of the TOTAL Highland variance
-        xx0Eloss = innerXX0 * (useInner ? (1. - innerW1) : 1.);
+        th2 = (useInner ? (1. - innerW1) : static_cast<double_st>(1.)) * th2InnerTot;  // linear split of the TOTAL Highland variance
+        xx0Eloss = innerXX0 * (useInner ? (1. - innerW1) : static_cast<double_st>(1.));
       } else if (i <= N - 2) {
-        xx0Eloss = double(matXX0(i - 1));
+        xx0Eloss = static_cast<double_st>(matXX0(i - 1));
         th2 = th2Of(xx0Eloss);
       }
       if (th2 > 0.) {
@@ -601,7 +614,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::generalBrokenLine {
       // material (elossTypicalColumn as a cumulative-column increment, or elossMostProbable per lump) enters as
       // d(q/p) = (q/p)*dE/p, so |q/p| grows as the track loses momentum outward.
       if (eLossPerX0 > 0. && xx0Eloss > 0. && elossCumulative) {
-        const double tPrev = elossTypicalColumn(acc, pTot, xx0ElossCum);
+        const double_st tPrev = elossTypicalColumn(acc, pTot, xx0ElossCum);
         xx0ElossCum += xx0Eloss;
         Deloss(0) += qbp * (elossTypicalColumn(acc, pTot, xx0ElossCum) - tPrev) / pTot;
       } else if (eLossPerX0 > 0. && xx0Eloss > 0.)
@@ -662,24 +675,24 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::generalBrokenLine {
                                                           const M3xN& hits,
                                                           const M6xN& hits_ge,
                                                           const V4& fast_fit,
-                                                          double bField,
+                                                          double_st bField,
                                                           int qCharge,
                                                           const VN& sTransverse,
                                                           const VN& sTotal,
                                                           const VN& matXX0,
-                                                          const double* gapD1,
-                                                          const double* gapW1,
-                                                          double innerXX0,
-                                                          double innerD1,
-                                                          double innerW1,
+                                                          const double_st* gapD1,
+                                                          const double_st* gapW1,
+                                                          double_st innerXX0,
+                                                          double_st innerD1,
+                                                          double_st innerW1,
                                                           GblNodeData* nodes,
-                                                          double msScale = 1.0,
-                                                          double eLossPerX0 = 0.0,
+                                                          double_st msScale = 1.0,
+                                                          double_st eLossPerX0 = 0.0,
                                                           // (Bz,Br) map + the origin field it normalizes to; a
                                                           // null map accumulates no field-profile offset.
                                                           // See prepareGblData.
                                                           const float* bMap = nullptr,
-                                                          double bFieldOrigin = 0.,
+                                                          double_st bFieldOrigin = 0.,
                                                           // Reference-trajectory corrections; see
                                                           // prepareGblData.
                                                           bool trajectoryCorrections = false,
@@ -696,62 +709,62 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::generalBrokenLine {
     // inverse scales as 1/ds).
     constexpr double kSplitStandOff = 0.02;
     constexpr double kSplitStandOffHi = 0.98;
-    const double cx = fast_fit(0), cy = fast_fit(1), R = fast_fit(2);
-    const double slope = -double(qCharge) / fast_fit(3);
-    const double pt = bField * R;
-    const double sec2 = 1. + slope * slope;
-    const double pTot = pt * alpaka::math::sqrt(acc, sec2);
-    const double cos2lam = 1. / sec2;
-    const double qbp = double(qCharge) / pTot;
+    const double_st cx = fast_fit(0), cy = fast_fit(1), R = fast_fit(2);
+    const double_st slope = -static_cast<double_st>(qCharge) / fast_fit(3);
+    const double_st pt = bField * R;
+    const double_st sec2 = 1. + slope * slope;
+    const double_st pTot = pt * alpaka::math::sqrt(acc, sec2);
+    const double_st cos2lam = 1. / sec2;
+    const double_st qbp = static_cast<double_st>(qCharge) / pTot;
     const Vector3d hInvGeV(0., 0., bField);
-    const double invn = 1. / alpaka::math::sqrt(acc, sec2);
-    const double qArc = trajectoryCorrections ? -double(qCharge) : double(qCharge);
-    const double cmag = alpaka::math::sqrt(acc, cx * cx + cy * cy);
-    const double sT0 = double(sTransverse(0));
-    const double z0 = hits(2, 0) - slope * sT0;
+    const double_st invn = 1. / alpaka::math::sqrt(acc, sec2);
+    const double_st qArc = trajectoryCorrections ? -static_cast<double_st>(qCharge) : static_cast<double_st>(qCharge);
+    const double_st cmag = alpaka::math::sqrt(acc, cx * cx + cy * cy);
+    const double_st sT0 = static_cast<double_st>(sTransverse(0));
+    const double_st z0 = hits(2, 0) - slope * sT0;
     if (!(innerXX0 > 0.) || !(innerW1 > 0.) || !(innerW1 < 1.) || !(sT0 > 0.))
       return false;
 
-    auto computeNode = [&](double x, double y, double z, Vector3d& p, Vector3d& d) {
+    auto computeNode = [&](double_st x, double_st y, double_st z, Vector3d& p, Vector3d& d) {
       p = Vector3d(x, y, z);
-      const double rx = (x - cx) / R, ry = (y - cy) / R;
-      const double tx = double(qCharge) * ry, ty = -double(qCharge) * rx;
+      const double_st rx = (x - cx) / R, ry = (y - cy) / R;
+      const double_st tx = static_cast<double_st>(qCharge) * ry, ty = -static_cast<double_st>(qCharge) * rx;
       d = Vector3d(tx * invn, ty * invn, slope * invn);
     };
     // reference-helix point at transverse arc sT: the PCA radius vector rotated by the signed angle
     // sT/R about the pre-fitted centre, with the sz-plane line for z. The circle advances its azimuth at
     // dpsi/dsTransverse = -q/R -- the convention sTransverse itself carries -- so the rotation is -q*sT/R;
     // the opposite sign mirrors the point about the PCA radius while leaving its z right.
-    auto helixAt = [&](double sT, double& hx, double& hy, double& hz) {
-      const double phiA = qArc * sT / R;
-      const double ex = cx * (1. - R / cmag) - cx, ey = cy * (1. - R / cmag) - cy;
-      const double ca = alpaka::math::cos(acc, phiA), sa = alpaka::math::sin(acc, phiA);
+    auto helixAt = [&](double_st sT, double_st& hx, double_st& hy, double_st& hz) {
+      const double_st phiA = qArc * sT / R;
+      const double_st ex = cx * (1. - R / cmag) - cx, ey = cy * (1. - R / cmag) - cy;
+      const double_st ca = alpaka::math::cos(acc, phiA), sa = alpaka::math::sin(acc, phiA);
       hx = cx + ex * ca - ey * sa;
       hy = cy + ex * sa + ey * ca;
       hz = z0 + slope * sT;
     };
     // Total declared material of the 2N+1 layout's gap set: the upstream lump plus EVERY inter-hit gap (this
     // layout places an interior scatterer in each). Only read under scatteringLogAtTotal (see th2Of).
-    double xx0TotDecl = 0.;
+    double_st xx0TotDecl = 0.;
     if (scatteringLogAtTotal) {
       if (innerXX0 > 0.)
         xx0TotDecl += innerXX0;
       for (int g = 0; g < N - 1; ++g)
-        if (double(matXX0(g)) > 0.)
-          xx0TotDecl += double(matXX0(g));
+        if (static_cast<double_st>(matXX0(g)) > 0.)
+          xx0TotDecl += static_cast<double_st>(matXX0(g));
     }
     // See prepareGblData: scatteringLogAtTotal moves ONLY the argument of the Highland log to the track's
     // total declared thickness; the leading xx0 is untouched, so each gap keeps its share W_g/X_tot and the
     // endpoint partition (w1 / 1-w1) that splits a gap across its two nodes is untouched as well.
-    auto th2Of = [&](double xx0) {
+    auto th2Of = [&](double_st xx0) {
       if (xx0 <= 0.)
-        return 0.;
+        return static_cast<double_st>(0.);
       constexpr double mPi = 0.13957;
-      const double betaP = pTot * pTot / alpaka::math::sqrt(acc, pTot * pTot + mPi * mPi);
-      const double tt = 0.0136 / betaP;
-      const double xLog = (scatteringLogAtTotal && xx0TotDecl > 0.) ? xx0TotDecl : xx0;
-      const double f = 1. + 0.038 * alpaka::math::log(acc, xLog);
-      return tt * tt * xx0 * f * f * msScale;
+      const double_st betaP = pTot * pTot / alpaka::math::sqrt(acc, pTot * pTot + mPi * mPi);
+      const double_st tt = 0.0136 / betaP;
+      const double_st xLog = (scatteringLogAtTotal && xx0TotDecl > 0.) ? xx0TotDecl : static_cast<double_st>(xx0);
+      const double_st f = 1. + 0.038 * alpaka::math::log(acc, xLog);
+      return static_cast<double_st>(tt * tt * xx0 * f * f * msScale);
     };
 
     Vector3d posPrev, dirPrev;  // node k-1 of the rolling window
@@ -763,42 +776,42 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::generalBrokenLine {
     const bool useLambdaRow = useField && trajectoryCorrections;
     // B_bend/Bz(0,0) at a node; see the arrival-node builder.
     auto bBendOf = [&](const Vector3d& p) {
-      const double r = alpaka::math::sqrt(acc, p.x() * p.x() + p.y() * p.y());
-      const double den = fast_fit(3) * alpaka::math::abs(acc, R) * r;
-      const double tlca = (den != 0.) ? -(cx * p.y() - cy * p.x()) / den : 0.;
+      const double_st r = alpaka::math::sqrt(acc, p.x() * p.x() + p.y() * p.y());
+      const double_st den = fast_fit(3) * alpaka::math::abs(acc, R) * r;
+      const double_st tlca = (den != 0.) ? -(cx * p.y() - cy * p.x()) / den : static_cast<double_st>(0.);
       return blBFieldMap::bBendAt(bMap, r, p.z(), tlca);
     };
     // B_bend plus B_r/Bz(0,0) times sin(alpha); see the arrival-node builder.
-    auto bBendBrOf = [&](const Vector3d& p, double& brSinAlpha) {
-      const double r = alpaka::math::sqrt(acc, p.x() * p.x() + p.y() * p.y());
-      const double den = fast_fit(3) * alpaka::math::abs(acc, R) * r;
-      const double tlca = (den != 0.) ? -(cx * p.y() - cy * p.x()) / den : 0.;
-      double brNorm = 0.;
-      const double bb = blBFieldMap::bBendAndBrAt(bMap, r, p.z(), tlca, brNorm);
-      const double sinA =
-          (r > 0. && R != 0.) ? -double(qCharge) * (p.x() * (p.x() - cx) + p.y() * (p.y() - cy)) / (R * r) : 0.;
+    auto bBendBrOf = [&](const Vector3d& p, double_st& brSinAlpha) {
+      const double_st r = alpaka::math::sqrt(acc, p.x() * p.x() + p.y() * p.y());
+      const double_st den = fast_fit(3) * alpaka::math::abs(acc, R) * r;
+      const double_st tlca = (den != 0.) ? -(cx * p.y() - cy * p.x()) / den : static_cast<double_st>(0.);
+      double brNorm = 0.;  // INFO: CADNA needs to stay double
+      const double_st bb = blBFieldMap::bBendAndBrAt(bMap, r, p.z(), tlca, brNorm);
+      const double_st sinA =
+          (r > 0. && R != 0.) ? -static_cast<double_st>(qCharge) * (p.x() * (p.x() - cx) + p.y() * (p.y() - cy)) / (R * r) : static_cast<double_st>(0.);
       brSinAlpha = brNorm * sinA;
       return bb;
     };
-    double bbPrev = 0.;
-    double bsPrev = 0.;
+    double_st bbPrev = 0.;
+    double_st bsPrev = 0.;
     if (useField)
-      bbPrev = useLambdaRow ? bBendBrOf(posPrev, bsPrev) : bBendOf(posPrev);
+      bbPrev = useLambdaRow ? static_cast<double_st>(bBendBrOf(posPrev, bsPrev)) : static_cast<double_st>(bBendOf(posPrev));
     Vector5d Deloss = Vector5d::Zero();
     // running charged column [X/X0] for the cumulative typical-loss law (walk order = path order:
     // upstream w1 lump, hit0's 1-w1 remainder, then per gap the interior w1 lump + arrival 1-w1)
-    double xx0ElossCum = 0.;
+    double_st xx0ElossCum = 0.;
     // path length of node k-1. Node 0 is the PCA, whose own sTotal is sin(lambda)*z0 in the frame sTotal is
     // measured in (see the arrival-node builder), not zero.
-    double sTotPrev = trajectoryCorrections ? slope * invn * z0 : 0.;
+    double_st sTotPrev = trajectoryCorrections ? slope * invn * z0 : static_cast<double_st>(0.);
     // propagate the accumulated offset across one segment, charging the segment's field-profile azimuth
     // excess half at each end (see the arrival-node builder).
-    auto carryOffset = [&](const Matrix5d& jac, const Vector3d& posCur, double dsSeg) {
-      double dPhiHalf = 0.;
-      double dLamHalf = 0.;
+    auto carryOffset = [&](const Matrix5d& jac, const Vector3d& posCur, double_st dsSeg) {
+      double_st dPhiHalf = 0.;
+      double_st dLamHalf = 0.;
       if (useField) {
-        double bsCur = 0.;
-        const double bbCur = useLambdaRow ? bBendBrOf(posCur, bsCur) : bBendOf(posCur);
+        double_st bsCur = 0.;
+        const double_st bbCur = useLambdaRow ? static_cast<double_st>(bBendBrOf(posCur, bsCur)) : static_cast<double_st>(bBendOf(posCur));
         dPhiHalf = -0.5 * qbp * (bFieldOrigin * 0.5 * (bbPrev + bbCur) - bField) * dsSeg;
         if (useLambdaRow)
           dLamHalf = -0.5 * qbp * (bFieldOrigin * 0.5 * (bsPrev + bsCur)) * dsSeg;
@@ -817,32 +830,39 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::generalBrokenLine {
     };
 
     // one measurement node, emitted for hit i at slot k.
-    auto emitHit = [&](int k, int i, double th2, double xx0Eloss) {
+    auto emitHit = [&](int k, int i, double_st th2, double_st xx0Eloss) {
       Vector3d posCur, dirCur;
       computeNode(hits(0, i), hits(1, i), hits(2, i), posCur, dirCur);
       GblNodeData nd;
-      const double sTotCur = double(sTotal(i));
+      const double_st sTotCur = static_cast<double_st>(sTotal(i));
       nd.jacToPrev = curvilinearJacobian(acc, dirPrev, dirCur, posPrev - posCur, qbp, hInvGeV, sTotCur - sTotPrev);
       if (detOffset)
         carryOffset(nd.jacToPrev, posCur, sTotCur - sTotPrev);
       const Vector3d T = dirCur;
-      const double un = 1. / alpaka::math::sqrt(acc, T.x() * T.x() + T.y() * T.y());
+      const double_st un = 1. / alpaka::math::sqrt(acc, T.x() * T.x() + T.y() * T.y());
       const Vector3d U(-T.y() * un, T.x() * un, 0.);
       const Vector3d V(-T.z() * U.y(), T.z() * U.x(), T.x() * U.y() - T.y() * U.x());
       Matrix23d Ruv;
       Ruv.row(0) = U.transpose();
       Ruv.row(1) = V.transpose();
       Matrix3d ge3;
-      ge3 << hits_ge(0, i), hits_ge(1, i), hits_ge(3, i), hits_ge(1, i), hits_ge(2, i), hits_ge(4, i), hits_ge(3, i),
-          hits_ge(4, i), hits_ge(5, i);
+      ge3 << static_cast<double_st>(hits_ge(0, i)),
+             static_cast<double_st>(hits_ge(1, i)),
+             static_cast<double_st>(hits_ge(3, i)),
+             static_cast<double_st>(hits_ge(1, i)),
+             static_cast<double_st>(hits_ge(2, i)),
+             static_cast<double_st>(hits_ge(4, i)),
+             static_cast<double_st>(hits_ge(3, i)),
+             static_cast<double_st>(hits_ge(4, i)),
+             static_cast<double_st>(hits_ge(5, i));
       // residual: measured hit minus the reference helix -- the closest circle point in the bending plane,
       // z = z0 + slope*sTransverse longitudinally. The SAME expression the arrival-node builder uses, so the
       // two layouts share one measurement model.
-      const double dvx = hits(0, i) - cx, dvy = hits(1, i) - cy;
-      const double dmag = alpaka::math::sqrt(acc, dvx * dvx + dvy * dvy);
+      const double_st dvx = hits(0, i) - cx, dvy = hits(1, i) - cy;
+      const double_st dmag = alpaka::math::sqrt(acc, dvx * dvx + dvy * dvy);
       const Vector3d residual3(hits(0, i) - (cx + R * dvx / dmag),
                                hits(1, i) - (cy + R * dvy / dmag),
-                               hits(2, i) - (z0 + slope * double(sTransverse(i))));
+                               hits(2, i) - (z0 + slope * static_cast<double_st>(sTransverse(i))));
       nd.measPrec = inv2(Ruv * ge3 * Ruv.transpose());
       nd.measResidual = Ruv * residual3;
       nd.hasMeas = true;
@@ -853,7 +873,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::generalBrokenLine {
         nd.hasScat = true;
       }
       if (eLossPerX0 > 0. && xx0Eloss > 0. && elossCumulative) {
-        const double tPrev = elossTypicalColumn(acc, pTot, xx0ElossCum);
+        const double_st tPrev = elossTypicalColumn(acc, pTot, xx0ElossCum);
         xx0ElossCum += xx0Eloss;
         Deloss(0) += qbp * (elossTypicalColumn(acc, pTot, xx0ElossCum) - tPrev) / pTot;
       } else if (eLossPerX0 > 0. && xx0Eloss > 0.)
@@ -864,7 +884,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::generalBrokenLine {
       sTotPrev = sTotCur;
     };
     // one measurement-less equivalent scatterer at slot k, at transverse arc sTA and path sTotCur.
-    auto emitScat = [&](int k, double px, double py, double pz, double sTotCur, double th2, double xx0Eloss) {
+    auto emitScat = [&](int k, double_st px, double_st py, double_st pz, double_st sTotCur, double_st th2, double_st xx0Eloss) {
       Vector3d posCur, dirCur;
       computeNode(px, py, pz, posCur, dirCur);
       GblNodeData nd;
@@ -874,7 +894,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::generalBrokenLine {
       nd.scatPrec << 1. / th2, 0., 0., cos2lam / th2;
       nd.hasScat = true;
       if (eLossPerX0 > 0. && xx0Eloss > 0. && elossCumulative) {
-        const double tPrev = elossTypicalColumn(acc, pTot, xx0ElossCum);
+        const double_st tPrev = elossTypicalColumn(acc, pTot, xx0ElossCum);
         xx0ElossCum += xx0Eloss;
         Deloss(0) += qbp * (elossTypicalColumn(acc, pTot, xx0ElossCum) - tPrev) / pTot;
       } else if (eLossPerX0 > 0. && xx0Eloss > 0.)
@@ -888,21 +908,21 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::generalBrokenLine {
     // node 1: the upstream equivalent scatterer, on the reference helix (there is no hit upstream of it
     // to anchor against, and the PCA is the reference itself).
     {
-      double sTA = sT0 - innerD1 * invn;
+      double_st sTA = sT0 - innerD1 * invn;
       sTA = sTA < kSplitStandOff * sT0 ? kSplitStandOff * sT0
                                        : (sTA > kSplitStandOffHi * sT0 ? kSplitStandOffHi * sT0 : sTA);
-      double px, py, pz;
+      double_st px, py, pz;
       helixAt(sTA, px, py, pz);
-      const double th2Inner = th2Of(innerXX0);
+      const double_st th2Inner = th2Of(innerXX0);
       if (!(innerW1 * th2Inner > 0.))
         return false;  // the upstream node would have no kink: not a well-posed measurement-less node
-      emitScat(1, px, py, pz, double(sTotal(0)) - innerD1, innerW1 * th2Inner, innerXX0 * innerW1);
+      emitScat(1, px, py, pz, static_cast<double_st>(sTotal(0)) - innerD1, innerW1 * th2Inner, innerXX0 * innerW1);
     }
     // hit 0's offset from the reference helix: the arrival node's residual here, and the departure
     // anchor of the first gap.
-    double offPrevX, offPrevY, offPrevZ;
+    double_st offPrevX, offPrevY, offPrevZ;
     {
-      double hx0, hy0, hz0;
+      double_st hx0, hy0, hz0;
       helixAt(sT0, hx0, hy0, hz0);
       offPrevX = hits(0, 0) - hx0;
       offPrevY = hits(1, 0) - hy0;
@@ -911,41 +931,41 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::generalBrokenLine {
     }
     for (int g = 0; g < N - 1; ++g) {
       const bool last = (g == N - 2);
-      const double W = double(matXX0(g));
-      double w1 = gapW1[g];
-      double d1 = gapD1[g];
+      const double_st W = static_cast<double_st>(matXX0(g));
+      double_st w1 = gapW1[g];
+      double_st d1 = gapD1[g];
       if (!(W > 0.))
         return false;  // no material: nothing to place, and a kink-free measurement-less node is not well posed
-      const double lo = double(sTransverse(g)), hi = double(sTransverse(g + 1));
+      const double_st lo = static_cast<double_st>(sTransverse(g)), hi = static_cast<double_st>(sTransverse(g + 1));
       if (!(hi > lo))
         return false;  // the two hits are not ordered in the fit's own arc length: no interior node fits
       if (!(w1 > 0.) || !(d1 > 0.) || !(w1 < 1.)) {
         w1 = 1.;  // single-atom measure (or all of it at the arrival end): the interior node takes the gap
-        d1 = (d1 > 0.) ? d1 : 0.;
+        d1 = (d1 > 0.) ? d1 : static_cast<double_st>(0.);
       }
-      double sa = hi - d1 * invn;
-      const double loC = lo + kSplitStandOff * (hi - lo), hiC = hi - kSplitStandOff * (hi - lo);
+      double_st sa = hi - d1 * invn;
+      const double_st loC = lo + kSplitStandOff * (hi - lo), hiC = hi - kSplitStandOff * (hi - lo);
       sa = sa < loC ? loC : (sa > hiC ? hiC : sa);
       // the arrival hit's offset from the reference helix, needed BOTH to anchor the interior node and
       // as the arrival node's own residual.
-      double ax, ay, az;
+      double_st ax, ay, az;
       helixAt(hi, ax, ay, az);
-      const double offArrX = hits(0, g + 1) - ax, offArrY = hits(1, g + 1) - ay, offArrZ = hits(2, g + 1) - az;
-      double px, py, pz;
+      const double_st offArrX = hits(0, g + 1) - ax, offArrY = hits(1, g + 1) - ay, offArrZ = hits(2, g + 1) - az;
+      double_st px, py, pz;
       helixAt(sa, px, py, pz);
-      const double span = hi - lo;
-      const double tt = (span > 0.) ? (sa - lo) / span : 0.5;
+      const double_st span = hi - lo;
+      const double_st tt = (span > 0.) ? (sa - lo) / span : static_cast<double_st>(0.5);
       px += (1. - tt) * offPrevX + tt * offArrX;
       py += (1. - tt) * offPrevY + tt * offArrY;
       pz += (1. - tt) * offPrevZ + tt * offArrZ;
-      const double th2Gap = th2Of(W);
+      const double_st th2Gap = th2Of(W);
       if (!(th2Gap > 0.))
         return false;  // material present but no scattering variance to place (the Highland factor vanishes)
       // the path length must follow the position the node actually ends up at: curvilinearJacobian is
       // handed both the geometric displacement and the arc it corresponds to, and the two have to be the
       // same step, or the transport it builds is not the transport between those two points.
-      emitScat(3 + 2 * g, px, py, pz, double(sTotal(g + 1)) - (hi - sa) / invn, w1 * th2Gap, w1 * W);
-      const double wArr = last ? 0. : (1. - w1);
+      emitScat(3 + 2 * g, px, py, pz, static_cast<double_st>(sTotal(g + 1)) - (hi - sa) / invn, w1 * th2Gap, w1 * W);
+      const double_st wArr = last ? static_cast<double_st>(0.) : static_cast<double_st>(1. - w1);
       emitHit(4 + 2 * g, g + 1, wArr * th2Gap, wArr * W);
       offPrevX = offArrX;
       offPrevY = offArrY;
@@ -1003,15 +1023,15 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::generalBrokenLine {
                                                     // stack frame in a device buffer (see Kernel_BLFit). All four
                                                     // arrays are fully written before read, so the persistent
                                                     // buffer never exposes stale data.
-                                                    double* __restrict__ scratch,
+                                                    double_st* __restrict__ scratch,
                                                     Vector5d* corr = nullptr,
-                                                    double* fullDelta = nullptr,
-                                                    double* chi2 = nullptr,
+                                                    double_st* fullDelta = nullptr,
+                                                    double_st* chi2 = nullptr,
                                                     // optional out (3 per node): the [var(u0), cov(u0,u1), var(u1)]
                                                     // diagonal 2x2 block of A^-1 at each MEASUREMENT node (zeros
                                                     // elsewhere) -- the smoothed-offset covariance the outlier
                                                     // rejection needs for residual pulls r^T (V - C)^-1 r.
-                                                    double* nodeVar = nullptr,
+                                                    double_st* nodeVar = nullptr,
                                                     // Overlay (b) opt-in: the caller declares that its `fullDelta`
                                                     // IS the head of this fit's `scratch` block, so the epilogue
                                                     // writes through `scratch` and the __restrict__ contract holds.
@@ -1036,8 +1056,8 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::generalBrokenLine {
     const int s[5] = {0, uIdx(0), uIdx(0) + 1, uIdx(1), uIdx(1) + 1};
 
     // measurement RHS b and the smooth-reference chi2.
-    Eigen::Matrix<double, nP, 1> b = Eigen::Matrix<double, nP, 1>::Zero();
-    double chi2ref = 0.;  // chi2 of the smooth reference: sum_meas residual^T * prec * residual
+    Eigen::Matrix<double_st, nP, 1> b = Eigen::Matrix<double_st, nP, 1>::Zero();
+    double_st chi2ref = 0.;  // chi2 of the smooth reference: sum_meas residual^T * prec * residual
     const bool wantDelta = (corr || fullDelta || chi2);
     if (wantDelta)
       for (int i = 0; i < nNodes; ++i)
@@ -1047,24 +1067,24 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::generalBrokenLine {
         }
 
     Matrix5d covSub;
-    Eigen::Matrix<double, nP, 1> delta = Eigen::Matrix<double, nP, 1>::Zero();  // = A^-1 b (only read when wantDelta)
+    Eigen::Matrix<double_st, nP, 1> delta = Eigen::Matrix<double_st, nP, 1>::Zero();  // = A^-1 b (only read when wantDelta)
 
     // The GBL normal matrix A is a 1x1 (q/p) border + a symmetric band over the offsets, stored in
     // bordered-band form: O(N) storage + O(N) solve, against the O(N^2)/O(N^3) of the mathematically
     // equivalent dense (2N+3)^2 inverse. The border influence vector w is therefore always written
     // (see kGblInfluenceOffset).
     constexpr int nB = nP - 1;  // band dimension = the offset indices 1..nP-1
-    double dBorder = 0.;        // A(0,0)
+    double_st dBorder = 0.;        // A(0,0)
     // Off-stack band scratch, carved from this fit's `scratch` block (kGblScratchDoubles<N> doubles):
     // Mb (lower-packed band) then the border row cbor and the two solve vectors w/ms.
-    double* Mb = scratch;                     // nB*(kGblBand+1)
-    double* cbor = Mb + nB * (kGblBand + 1);  // border row A(0, 1..nP-1)
+    double_st* Mb = scratch;                     // nB*(kGblBand+1)
+    double_st* cbor = Mb + nB * (kGblBand + 1);  // border row A(0, 1..nP-1)
     for (int i = 0; i < nB; ++i)
       cbor[i] = 0.;
     for (int i = 0; i < nB * (kGblBand + 1); ++i)
       Mb[i] = 0.;
     // scatter A(r,c) += v into the border (index 0) + the lower band (r >= c, |r-c| <= kGblBand structural).
-    auto add = [&](int r, int c, double v) {
+    auto add = [&](int r, int c, double_st v) {
       if (r == 0) {
         if (c == 0)
           dBorder += v;
@@ -1096,12 +1116,12 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::generalBrokenLine {
         nextDerivatives(nodes[i + 1].jacToPrev, nextW, nextWJ, nextWd);
         const Matrix2d sumWJ = prevWJ + nextWJ;
         const Vector2d sumWd = prevWd + nextWd;
-        Eigen::Matrix<double, 2, 7> D;
+        Eigen::Matrix<double_st, 2, 7> D;
         D.block<2, 1>(0, 0) = -sumWd;
         D.block<2, 2>(0, 1) = prevW;
         D.block<2, 2>(0, 3) = -sumWJ;
         D.block<2, 2>(0, 5) = nextW;
-        const Eigen::Matrix<double, 7, 7> K = D.transpose() * nodes[i].scatPrec * D;
+        const Eigen::Matrix<double_st, 7, 7> K = D.transpose() * nodes[i].scatPrec * D;
         const int idx[7] = {0, uIdx(i - 1), uIdx(i - 1) + 1, uIdx(i), uIdx(i) + 1, uIdx(i + 1), uIdx(i + 1) + 1};
         for (int a = 0; a < 7; ++a)
           for (int bcol = 0; bcol < 7; ++bcol)
@@ -1109,20 +1129,20 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::generalBrokenLine {
       }
     // factor M, then eliminate the 1x1 q/p border by a scalar Schur complement: w = M^-1 c, schur = d - c^T w.
     bandFactor<kGblBand>(Mb, nB);
-    double* w = cbor + nB;
+    double_st* w = cbor + nB;
     for (int i = 0; i < nB; ++i)
       w[i] = cbor[i];
     bandSolveInPlace<kGblBand>(Mb, w, nB);
-    double schur = dBorder;
+    double_st schur = dBorder;
     for (int i = 0; i < nB; ++i)
       schur -= cbor[i] * w[i];
     // cbor's last read is the line above; overlay (a) hands its storage to `ms` from here on (ms's first use, the
     // j-loop below, zeroes [0,nB) before writing). Leading 5x5 of A^-1 from unit-column solves A x = e_{s[j]}:
     // with rhs = [r0; sBand], x0 = (r0 - w^T sBand)/schur and the band part = M^-1 sBand - x0 w.
-    double* ms = cbor;
+    double_st* ms = cbor;
     for (int j = 0; j < 5; ++j) {
       const int g = s[j];
-      double dot_ws = 0.;
+      double_st dot_ws = 0.;
       if (g == 0) {
         // s[0] == 0 is the BORDER column: its band right-hand side is identically zero, so the solve
         // M ms = 0 can only return ms == 0 -- a full O(n*band) sweep whose every output is the zero it
@@ -1137,11 +1157,11 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::generalBrokenLine {
         // so the back sweep must still reach index 0.
         bandSolveInPlace<kGblBand>(Mb, ms, nB, 1, /*iFirst=*/g - 1, /*iStop=*/0);
       }
-      const double r0 = (g == 0) ? 1. : 0.;
-      const double x0 = (r0 - dot_ws) / schur;
+      const double_st r0 = (g == 0) ? static_cast<double_st>(1.) : static_cast<double_st>(0.);
+      const double_st x0 = (r0 - dot_ws) / schur;
       for (int a = 0; a < 5; ++a) {
         const int ga = s[a];
-        const double msa = (g == 0) ? 0. : ms[ga - 1];
+        const double_st msa = (g == 0) ? static_cast<double_st>(0.) : ms[ga - 1];
         covSub(a, j) = (ga == 0) ? x0 : (msa - x0 * w[ga - 1]);
       }
     }
@@ -1164,9 +1184,9 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::generalBrokenLine {
           for (int k2 = zLo; k2 < nB; ++k2)
             ms[k2] = 0.;
           ms[g - 1] = 1.;
-          const double dot_ws = w[g - 1];
+          const double_st dot_ws = w[g - 1];
           bandSolveInPlace<kGblBand>(Mb, ms, nB, 1, iFirst, /*iStop=*/u - 1 + c);
-          const double x0 = (0. - dot_ws) / schur;
+          const double_st x0 = (0. - dot_ws) / schur;
           if (c == 0) {
             nodeVar[3 * i] = ms[u - 1] - x0 * w[u - 1];
             nodeVar[3 * i + 1] = ms[u] - x0 * w[u];
@@ -1177,13 +1197,13 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::generalBrokenLine {
       }
     // delta = A^-1 b (b has no q/p-border component: b(0) = 0, measurements never touch q/p directly).
     if (wantDelta) {
-      double dot_ws = 0.;
+      double_st dot_ws = 0.;
       for (int i = 0; i < nB; ++i) {
         ms[i] = b(1 + i);
         dot_ws += w[i] * b(1 + i);
       }
       bandSolveInPlace<kGblBand>(Mb, ms, nB);
-      const double x0 = (b(0) - dot_ws) / schur;
+      const double_st x0 = (b(0) - dot_ws) / schur;
       delta(0) = x0;
       for (int i = 0; i < nB; ++i)
         delta(1 + i) = ms[i] - x0 * w[i];
@@ -1195,7 +1215,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::generalBrokenLine {
       // block, so the write goes through `scratch` itself and the __restrict__ contract is preserved (the alias
       // is only null-tested). Legal here only: Mb's last read was the final bandSolveInPlace above, the nodeVar
       // solves are done, and nP = 2*nNodes+1 <= nB*(kGblBand+1) always, so the write stays inside Mb.
-      double* fullDeltaOut = (fullDelta != nullptr && fullDeltaInScratch) ? scratch : fullDelta;
+      double_st* fullDeltaOut = (fullDelta != nullptr && fullDeltaInScratch) ? scratch : fullDelta;
       if (fullDeltaOut)
         for (int a = 0; a < nP; ++a)
           fullDeltaOut[a] = delta(a);
@@ -1218,9 +1238,9 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::generalBrokenLine {
   ALPAKA_FN_ACC ALPAKA_FN_INLINE void gblHelixAtPca(const TAcc& acc,
                                                     const V4& fast_fit,
                                                     int qCharge,
-                                                    double bField,
-                                                    double sTransverse0,
-                                                    double hitZ0,
+                                                    double_st bField,
+                                                    double_st sTransverse0,
+                                                    double_st hitZ0,
                                                     const Vector5d& corr,
                                                     const Matrix5d& cov,
                                                     Vector5d& helixPar,
@@ -1233,25 +1253,25 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::generalBrokenLine {
                                                     // that it flips with the charge; off, the arc keeps the CCW
                                                     // turn angle's own sign for both charges.
                                                     bool chargeSymmetric = false) {
-    const double cx = fast_fit(0), cy = fast_fit(1), R = fast_fit(2);
-    const double slope = -double(qCharge) / fast_fit(3);
-    const double sec2 = 1. + slope * slope, invn = 1. / alpaka::math::sqrt(acc, sec2);
-    const double pTot = bField * R * alpaka::math::sqrt(acc, sec2);
-    const double cmag = alpaka::math::sqrt(acc, cx * cx + cy * cy);
-    const double pcaX = cx * (1. - R / cmag), pcaY = cy * (1. - R / cmag), z0ref = hitZ0 - slope * sTransverse0;
+    const double_st cx = fast_fit(0), cy = fast_fit(1), R = fast_fit(2);
+    const double_st slope = -static_cast<double_st>(qCharge) / fast_fit(3);
+    const double_st sec2 = 1. + slope * slope, invn = 1. / alpaka::math::sqrt(acc, sec2);
+    const double_st pTot = bField * R * alpaka::math::sqrt(acc, sec2);
+    const double_st cmag = alpaka::math::sqrt(acc, cx * cx + cy * cy);
+    const double_st pcaX = cx * (1. - R / cmag), pcaY = cy * (1. - R / cmag), z0ref = hitZ0 - slope * sTransverse0;
 
-    const double rx = (pcaX - cx) / R, ry = (pcaY - cy) / R;
-    const Vector3d T(double(qCharge) * ry * invn, -double(qCharge) * rx * invn, slope * invn);
+    const double_st rx = (pcaX - cx) / R, ry = (pcaY - cy) / R;
+    const Vector3d T(static_cast<double_st>(qCharge) * ry * invn, -static_cast<double_st>(qCharge) * rx * invn, slope * invn);
     const Vector3d Z(0., 0., 1.);
     const Vector3d U = curvilinearToPerigee::normalize3(acc, curvilinearToPerigee::cross3(Z, T));
     const Vector3d V = curvilinearToPerigee::cross3(T, U);
-    const double phiRef = alpaka::math::atan2(acc, T.y(), T.x());
-    const double lamRef = alpaka::math::atan2(acc, T.z(), alpaka::math::sqrt(acc, T.x() * T.x() + T.y() * T.y()));
+    const double_st phiRef = alpaka::math::atan2(acc, T.y(), T.x());
+    const double_st lamRef = alpaka::math::atan2(acc, T.z(), alpaka::math::sqrt(acc, T.x() * T.x() + T.y() * T.y()));
 
-    const double phiFit = phiRef + corr(2), lamFit = lamRef + corr(1);
-    const double qbpFit = double(qCharge) / pTot + corr(0);
-    const double pFit = 1. / alpaka::math::abs(acc, qbpFit);
-    const double clam = alpaka::math::cos(acc, lamFit), slam = alpaka::math::sin(acc, lamFit);
+    const double_st phiFit = phiRef + corr(2), lamFit = lamRef + corr(1);
+    const double_st qbpFit = static_cast<double_st>(qCharge) / pTot + corr(0);
+    const double_st pFit = 1. / alpaka::math::abs(acc, qbpFit);
+    const double_st clam = alpaka::math::cos(acc, lamFit), slam = alpaka::math::sin(acc, lamFit);
     const Vector3d mom(
         pFit * clam * alpaka::math::cos(acc, phiFit), pFit * clam * alpaka::math::sin(acc, phiFit), pFit * slam);
     const Vector3d pos(pcaX + corr(3) * U.x() + corr(4) * V.x(),
@@ -1259,30 +1279,30 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::generalBrokenLine {
                        z0ref + corr(3) * U.z() + corr(4) * V.z());
 
     // propagate node 0 -> the fitted helix's true transverse PCA, then perigee there.
-    const double ptf = alpaka::math::sqrt(acc, mom.x() * mom.x() + mom.y() * mom.y());
-    const double pmag = alpaka::math::sqrt(acc, ptf * ptf + mom.z() * mom.z());
-    const double Rf = ptf / bField;
-    const double tnx = mom.x() / ptf, tny = mom.y() / ptf;
-    const double Cx = pos.x() + Rf * double(qCharge) * tny, Cy = pos.y() - Rf * double(qCharge) * tnx;
-    const double Cmag = alpaka::math::sqrt(acc, Cx * Cx + Cy * Cy);
-    const double Px = Cx * (1. - Rf / Cmag), Py = Cy * (1. - Rf / Cmag);
+    const double_st ptf = alpaka::math::sqrt(acc, mom.x() * mom.x() + mom.y() * mom.y());
+    const double_st pmag = alpaka::math::sqrt(acc, ptf * ptf + mom.z() * mom.z());
+    const double_st Rf = ptf / bField;
+    const double_st tnx = mom.x() / ptf, tny = mom.y() / ptf;
+    const double_st Cx = pos.x() + Rf * static_cast<double_st>(qCharge) * tny, Cy = pos.y() - Rf * static_cast<double_st>(qCharge) * tnx;
+    const double_st Cmag = alpaka::math::sqrt(acc, Cx * Cx + Cy * Cy);
+    const double_st Px = Cx * (1. - Rf / Cmag), Py = Cy * (1. - Rf / Cmag);
     if (nextRef) {                             // the fitted circle, ready to re-seed a GBL re-linearization pass
-      const double slopeNext = mom.z() / ptf;  // cotTheta of the fitted track
+      const double_st slopeNext = mom.z() / ptf;  // cotTheta of the fitted track
       (*nextRef)(0) = Cx;
       (*nextRef)(1) = Cy;
       (*nextRef)(2) = Rf;
-      (*nextRef)(3) = -double(qCharge) / slopeNext;  // prepareGblData reads slope = -qCharge/fast_fit(3)
+      (*nextRef)(3) = -static_cast<double_st>(qCharge) / slopeNext;  // prepareGblData reads slope = -qCharge/fast_fit(3)
     }
-    const double v0x = pos.x() - Cx, v0y = pos.y() - Cy, vPx = Px - Cx, vPy = Py - Cy;
-    const double dAlpha = alpaka::math::atan2(acc, v0x * vPy - v0y * vPx, v0x * vPx + v0y * vPy);
+    const double_st v0x = pos.x() - Cx, v0y = pos.y() - Cy, vPx = Px - Cx, vPy = Py - Cy;
+    const double_st dAlpha = alpaka::math::atan2(acc, v0x * vPy - v0y * vPx, v0x * vPx + v0y * vPy);
     // dAlpha is the CCW turn angle about the circle centre; the FORWARD arc advances the azimuth at
     // dpsi/ds = -q/Rf, so the signed arc is -q*Rf*dAlpha. The rotation of the momentum below is a rigid
     // rotation by the same CCW angle and carries no charge.
-    const double dsT = (chargeSymmetric ? -double(qCharge) : 1.) * Rf * dAlpha, ds = dsT * pmag / ptf;
-    const double ca = alpaka::math::cos(acc, dAlpha), sa = alpaka::math::sin(acc, dAlpha);
+    const double_st dsT = (chargeSymmetric ? -static_cast<double_st>(qCharge) : static_cast<double_st>(1.)) * Rf * dAlpha, ds = dsT * pmag / ptf;
+    const double_st ca = alpaka::math::cos(acc, dAlpha), sa = alpaka::math::sin(acc, dAlpha);
     const Vector3d momPca(mom.x() * ca - mom.y() * sa, mom.x() * sa + mom.y() * ca, mom.z());
     const Vector3d posPca(Px, Py, pos.z() + (mom.z() / ptf) * dsT);
-    const double qbp = double(qCharge) / pmag;
+    const double_st qbp = static_cast<double_st>(qCharge) / pmag;
     const Matrix5d Jprop =
         curvilinearJacobian(acc, mom / pmag, momPca / pmag, pos - posPca, qbp, Vector3d(0., 0., bField), ds);
     const Matrix5d covPca = Jprop * cov * Jprop.transpose();
@@ -1292,8 +1312,8 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::generalBrokenLine {
     const Matrix5d Jcp = curvilinearToPerigee::jacobian(acc, momPca, bvec, qCharge);
     const Matrix5d perigeeCov = Jcp * covPca * Jcp.transpose();
 
-    const double theta = perigee(1);
-    const double cott = 1. / alpaka::math::tan(acc, theta), dcot_dtheta = -(1. + cott * cott);
+    const double_st theta = perigee(1);
+    const double_st cott = 1. / alpaka::math::tan(acc, theta), dcot_dtheta = -(1. + cott * cott);
     helixPar(0) = perigee(2);   // phi
     helixPar(1) = perigee(3);   // d0
     helixPar(2) = -perigee(0);  // k = 1/R
@@ -1306,6 +1326,17 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::generalBrokenLine {
     M(3, 1) = dcot_dtheta;
     M(4, 4) = 1.;
     helixCov = M * perigeeCov * M.transpose();
+
+    // assert(false);
+
+    // edm::LogWarning("here");
+    std::cout << "-- GENERAL BROKEN LINE (HELIX FIT) --\n";
+    const int in_digits = static_cast<double_st>(0.).nb_significant_digit();
+    print_cadna_metric("Phi", perigee(2), in_digits);
+    print_cadna_metric("d0", perigee(2), in_digits);
+    print_cadna_metric("k = 1/R", perigee(2), in_digits);
+    print_cadna_metric("cotTheta", perigee(2), in_digits);
+    print_cadna_metric("z0", perigee(2), in_digits);
   }
 
 }  // namespace ALPAKA_ACCELERATOR_NAMESPACE::generalBrokenLine

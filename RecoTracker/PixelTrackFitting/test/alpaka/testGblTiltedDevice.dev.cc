@@ -50,6 +50,7 @@
 #include "HeterogeneousCore/AlpakaInterface/interface/config.h"
 #include "HeterogeneousCore/AlpakaInterface/interface/memory.h"
 #include "HeterogeneousCore/AlpakaInterface/interface/workdivision.h"
+#include "Utilities/Cadna/interface/CadnaEigenTypes.h"
 
 #include "RecoTracker/PixelTrackFitting/interface/BLMaterialMap.h"
 #include "RecoTracker/PixelTrackFitting/interface/BrokenLine.h"                // upstream host fastFit
@@ -109,29 +110,29 @@ namespace {
   // ---- kernel 1: the production node builder ---------------------------------------------------------
   struct BuildKernel {
     ALPAKA_FN_ACC void operator()(Acc1D const& acc,
-                                  double const* hitsIn,
-                                  float const* geIn,
-                                  double const* ffIn,
+                                  double_st const* hitsIn,
+                                  float_st const* geIn,
+                                  double_st const* ffIn,
                                   float const* rho,
                                   double bField,
                                   gbld::GblNodeData* nodes,
-                                  double* out) const {
+                                  double_st* out) const {
       for ([[maybe_unused]] auto lane : cms::alpakatools::uniform_elements(acc, 1)) {
-        Eigen::Matrix<double, 3, kN> hits;
-        Eigen::Matrix<float, 6, kN> hits_ge;
+        Eigen::Matrix<double_st, 3, kN> hits;
+        Eigen::Matrix<float_st, 6, kN> hits_ge;
         for (int c = 0; c < kN; ++c) {
           for (int r = 0; r < 3; ++r)
             hits(r, c) = hitsIn[3 * c + r];
           for (int r = 0; r < 6; ++r)
             hits_ge(r, c) = geIn[6 * c + r];
         }
-        const Eigen::Vector4d ff(ffIn[0], ffIn[1], ffIn[2], ffIn[3]);
+        const Eigen::Vector<double_st, 4> ff(ffIn[0], ffIn[1], ffIn[2], ffIn[3]);
 
         bld::PreparedGblData<kN> data;
-        double gapD1[kN], gapW1[kN];
+        double_st gapD1[kN], gapW1[kN];
         bld::prepareGblFitData(acc, hits, ff, bField, rho, data, /*matCached=*/nullptr, gapD1, gapW1);
-        const double rHit0 = alpaka::math::sqrt(acc, hits(0, 0) * hits(0, 0) + hits(1, 0) * hits(1, 0));
-        double innerD1 = 0., innerW1 = 0.;
+        const double_st rHit0 = alpaka::math::sqrt(acc, hits(0, 0) * hits(0, 0) + hits(1, 0) * hits(1, 0));
+        double_st innerD1 = 0., innerW1 = 0.;
         if (data.innerXX0 > 0.)
           bld::segmentXX0GapSplit(acc, rho, 0., 0., rHit0, hits(2, 0), innerD1, innerW1);
 
@@ -157,12 +158,12 @@ namespace {
                                                                     kTrajectoryCorrections,
                                                                     kScatteringLogAtTotal,
                                                                     kElossCumulative);
-        double matSum = 0.;
+        double_st matSum = 0.;
         for (int i = 0; i < kN; ++i)
           matSum += data.matXX0(i);
         out[kOutUsedSplit] = usedSplit ? 1. : 0.;
-        out[kOutQCharge] = double(data.qCharge);
-        out[kOutSTransverse0] = double(data.sTransverse(0));
+        out[kOutQCharge] = static_cast<double_st>(data.qCharge);
+        out[kOutSTransverse0] = static_cast<double_st>(data.sTransverse(0));
         out[kOutInnerXX0] = data.innerXX0;
         out[kOutMatSum] = matSum;
       }
@@ -176,17 +177,17 @@ namespace {
 
   struct SolveKernel {
     ALPAKA_FN_ACC void operator()(
-        Acc1D const& acc, gbld::GblNodeData const* nodesAll, double* scratch, double* out, int nVariants) const {
+        Acc1D const& acc, gbld::GblNodeData const* nodesAll, double_st* scratch, double_st* out, int nVariants) const {
       for (auto v : cms::alpakatools::uniform_elements(acc, nVariants)) {
         gbld::Vector5d corr = gbld::Vector5d::Zero();
-        double chi2 = 0.;
+        double_st chi2 = 0.;
         const auto cov = gbld::gblFitPca<Acc1D, kM>(acc,
                                                     nodesAll + int(v) * kNodes,
                                                     scratch + int(v) * gbld::kGblScratchDoubles<kM>,
                                                     &corr,
                                                     /*fullDelta=*/nullptr,
                                                     &chi2);
-        double* o = out + int(v) * kFitOutSize;
+        double_st* o = out + int(v) * kFitOutSize;
         for (int a = 0; a < 5; ++a) {
           o[kFitCorr + a] = corr(a);
           for (int b = 0; b < 5; ++b)
@@ -199,12 +200,12 @@ namespace {
 
   //!< max relative difference with a positive control (a 0-vs-0 comparison always passes).
   struct MaxRel {
-    double v = 0.;
+    double_st v = 0.;
     bool any = false;
-    void add(double got, double ref) {
-      if (std::abs(ref) > 1e-30) {
+    void add(double_st got, double_st ref) {
+      if (abs(ref) > 1e-30) {
         any = true;
-        v = std::max(v, std::abs(got - ref) / std::abs(ref));
+        v = fmax(v, abs(got - ref) / abs(ref));
       }
     }
   };
@@ -220,15 +221,15 @@ TEST_CASE("GBL tilted-module measurement model for the " EDM_STRINGIZE(ALPAKA_AC
   using namespace gblTestFixtures;
   constexpr double kB = gblTestFixtures::kB;
 
-  Eigen::Matrix<double, 3, kN> hits;
-  Eigen::Matrix<float, 6, kN> hits_ge = Eigen::Matrix<float, 6, kN>::Zero();
+  Eigen::Matrix<double_st, 3, kN> hits;
+  Eigen::Matrix<float_st, 6, kN> hits_ge = Eigen::Matrix<float_st, 6, kN>::Zero();
   for (int k = 0; k < kN; ++k) {
     hits(0, k) = TILT[k][0];
     hits(1, k) = TILT[k][1];
     hits(2, k) = TILT[k][2];
     hits_ge.col(k) << TILT[k][3], TILT[k][4], TILT[k][5], TILT[k][6], TILT[k][7], TILT[k][8];
   }
-  Eigen::Vector4d ff;
+  Eigen::Vector<double_st, 4> ff;
   blh::fastFit(hits, ff);
 
   auto rho_h = cms::alpakatools::make_host_buffer<float[], Platform>(blMaterialMap::kSize);
@@ -241,9 +242,9 @@ TEST_CASE("GBL tilted-module measurement model for the " EDM_STRINGIZE(ALPAKA_AC
     auto rho_d = cms::alpakatools::make_device_buffer<float[]>(queue, blMaterialMap::kSize);
     alpaka::memcpy(queue, rho_d, rho_h);
 
-    auto hits_h = cms::alpakatools::make_host_buffer<double[], Platform>(3 * kN);
-    auto ge_h = cms::alpakatools::make_host_buffer<float[], Platform>(6 * kN);
-    auto ff_h = cms::alpakatools::make_host_buffer<double[], Platform>(4);
+    auto hits_h = cms::alpakatools::make_host_buffer<double_st[], Platform>(3 * kN);
+    auto ge_h = cms::alpakatools::make_host_buffer<float_st[], Platform>(6 * kN);
+    auto ff_h = cms::alpakatools::make_host_buffer<double_st[], Platform>(4);
     for (int c = 0; c < kN; ++c) {
       for (int r = 0; r < 3; ++r)
         hits_h[3 * c + r] = hits(r, c);
@@ -253,13 +254,13 @@ TEST_CASE("GBL tilted-module measurement model for the " EDM_STRINGIZE(ALPAKA_AC
     for (int j = 0; j < 4; ++j)
       ff_h[j] = ff(j);
 
-    auto hits_d = cms::alpakatools::make_device_buffer<double[]>(queue, 3 * kN);
-    auto ge_d = cms::alpakatools::make_device_buffer<float[]>(queue, 6 * kN);
-    auto ff_d = cms::alpakatools::make_device_buffer<double[]>(queue, 4);
+    auto hits_d = cms::alpakatools::make_device_buffer<double_st[]>(queue, 3 * kN);
+    auto ge_d = cms::alpakatools::make_device_buffer<float_st[]>(queue, 6 * kN);
+    auto ff_d = cms::alpakatools::make_device_buffer<double_st[]>(queue, 4);
     auto nodes_d = cms::alpakatools::make_device_buffer<gbld::GblNodeData[]>(queue, kNodes);
-    auto bout_d = cms::alpakatools::make_device_buffer<double[]>(queue, kBuildOutSize);
+    auto bout_d = cms::alpakatools::make_device_buffer<double_st[]>(queue, kBuildOutSize);
     auto nodes_h = cms::alpakatools::make_host_buffer<gbld::GblNodeData[], Platform>(kNodes);
-    auto bout_h = cms::alpakatools::make_host_buffer<double[], Platform>(kBuildOutSize);
+    auto bout_h = cms::alpakatools::make_host_buffer<double_st[], Platform>(kBuildOutSize);
     alpaka::memcpy(queue, hits_d, hits_h);
     alpaka::memcpy(queue, ge_d, ge_h);
     alpaka::memcpy(queue, ff_d, ff_h);
@@ -311,17 +312,17 @@ TEST_CASE("GBL tilted-module measurement model for the " EDM_STRINGIZE(ALPAKA_AC
     // (b) module frame: the curvilinear (U,V) frame at each hit, exactly as the device builder forms it
     // (alpaka/GeneralBrokenLine.h emitHit), then proL2m maps a (U,V) offset onto the true module axes.
     {
-      const double cx = ff(0), cy = ff(1), R = ff(2);
-      const double slope = -double(qCharge) / ff(3);
-      const double invn = 1. / std::sqrt(1. + slope * slope);
+      const double_st cx = ff(0), cy = ff(1), R = ff(2);
+      const double_st slope = -static_cast<double_st>(qCharge) / ff(3);
+      const double_st invn = 1. / sqrt(1. + slope * slope);
       for (int i = 0; i < kN; ++i) {
-        const double rx = (hits(0, i) - cx) / R, ry = (hits(1, i) - cy) / R;
-        const Eigen::Vector3d T(double(qCharge) * ry * invn, -double(qCharge) * rx * invn, slope * invn);
-        const double un = 1. / std::sqrt(T.x() * T.x() + T.y() * T.y());
-        const Eigen::Vector3d U(-T.y() * un, T.x() * un, 0.);
-        const Eigen::Vector3d V = T.cross(U);
-        const Eigen::Vector3d lx(TILT_LX[i][0], TILT_LX[i][1], TILT_LX[i][2]);
-        const Eigen::Vector3d ly(TILT_LY[i][0], TILT_LY[i][1], TILT_LY[i][2]);
+        const double_st rx = (hits(0, i) - cx) / R, ry = (hits(1, i) - cy) / R;
+        const Eigen::Vector<double_st, 3> T(static_cast<double_st>(qCharge) * ry * invn, -static_cast<double_st>(qCharge) * rx * invn, slope * invn);
+        const double_st un = 1. / sqrt(T.x() * T.x() + T.y() * T.y());
+        const Eigen::Vector<double_st, 3> U(-T.y() * un, T.x() * un, 0.);
+        const Eigen::Vector<double_st, 3> V = T.cross(U);
+        const Eigen::Vector<double_st, 3> lx(TILT_LX[i][0], TILT_LX[i][1], TILT_LX[i][2]);
+        const Eigen::Vector<double_st, 3> ly(TILT_LY[i][0], TILT_LY[i][1], TILT_LY[i][2]);
         Eigen::Matrix2d proL2m;
         proL2m << lx.dot(U), lx.dot(V), ly.dot(U), ly.dot(V);
         Eigen::Matrix2d locPrec = Eigen::Matrix2d::Zero();
@@ -361,9 +362,9 @@ TEST_CASE("GBL tilted-module measurement model for the " EDM_STRINGIZE(ALPAKA_AC
 
     // ---- solve all seven on the device, and the same seven on the host twin --------------------------
     auto dv_d = cms::alpakatools::make_device_buffer<gbld::GblNodeData[]>(queue, kVariants * kNodes);
-    auto scr_d = cms::alpakatools::make_device_buffer<double[]>(queue, kVariants * gbld::kGblScratchDoubles<kM>);
-    auto fout_d = cms::alpakatools::make_device_buffer<double[]>(queue, kVariants * kFitOutSize);
-    auto fout_h = cms::alpakatools::make_host_buffer<double[], Platform>(kVariants * kFitOutSize);
+    auto scr_d = cms::alpakatools::make_device_buffer<double_st[]>(queue, kVariants * gbld::kGblScratchDoubles<kM>);
+    auto fout_d = cms::alpakatools::make_device_buffer<double_st[]>(queue, kVariants * kFitOutSize);
+    auto fout_h = cms::alpakatools::make_host_buffer<double_st[], Platform>(kVariants * kFitOutSize);
     alpaka::memcpy(queue, dv_d, dv_h);
     alpaka::memset(queue, fout_d, 0);
     alpaka::exec<Acc1D>(queue,
@@ -376,8 +377,8 @@ TEST_CASE("GBL tilted-module measurement model for the " EDM_STRINGIZE(ALPAKA_AC
     alpaka::memcpy(queue, fout_h, fout_d);
     alpaka::wait(queue);
 
-    const double slope = -double(qCharge) / ff(3);
-    const double sec2 = 1. + slope * slope;
+    const double_st slope = -static_cast<double_st>(qCharge) / ff(3);
+    const double_st sec2 = 1. + slope * slope;
     const char* vname[kVariants] = {"(a) as built",
                                     "(b) module frame",
                                     "(c) isotropic scat",
@@ -385,49 +386,49 @@ TEST_CASE("GBL tilted-module measurement model for the " EDM_STRINGIZE(ALPAKA_AC
                                     "(e) MS x0.1",
                                     "(f) MS x10",
                                     "(g) all precise"};
-    double sig1R[kVariants] = {};
+    double_st sig1R[kVariants] = {};
     std::printf("\n=== %s : TILT eta=1.087 Pt100, tilted OT barrel at hits 4,5,6 ===\n", devName.c_str());
     for (int v = 0; v < kVariants; ++v) {
       gblh::Vector5d hostCorr;
-      double hostChi2 = 0.;
+      double_st hostChi2 = 0.;
       const gblh::Matrix5d hostCov = gblh::gblFitPca(hv[v], &hostCorr, nullptr, &hostChi2);
       MaxRel cov, corr, chi2;
-      const double* o = &fout_h[v * kFitOutSize];
+      const double_st* o = &fout_h[v * kFitOutSize];
       for (int a = 0; a < 5; ++a) {
         corr.add(o[kFitCorr + a], hostCorr(a));
         for (int b = 0; b < 5; ++b)
           cov.add(o[kFitCov + a * 5 + b], hostCov(a, b));
       }
       chi2.add(o[kFitChi2], hostChi2);
-      sig1R[v] = kB * std::sqrt(std::abs(sec2 * o[kFitCov]));
+      sig1R[v] = kB * sqrt(abs(sec2 * o[kFitCov]));
       std::printf(
           "  %-19s sigma(1/R)=%.4e  sigma(d0)=%8.2f um  sigma(z0)=%8.2f um  chi2=%9.3f | twin cov=%.1e corr=%.1e "
           "chi2=%.1e\n",
           vname[v],
-          sig1R[v],
-          1.e4 * std::sqrt(std::abs(o[kFitCov + 3 * 5 + 3])),
-          1.e4 * std::sqrt(std::abs(o[kFitCov + 4 * 5 + 4])),
-          o[kFitChi2],
-          cov.v,
-          corr.v,
-          chi2.v);
+          static_cast<double>(sig1R[v]),
+          static_cast<double>(1.e4 * sqrt(abs(o[kFitCov + 3 * 5 + 3]))),
+          static_cast<double>(1.e4 * sqrt(abs(o[kFitCov + 4 * 5 + 4]))),
+          static_cast<double>(o[kFitChi2]),
+          static_cast<double>(cov.v),
+          static_cast<double>(corr.v),
+          static_cast<double>(chi2.v));
       REQUIRE(cov.any);
       REQUIRE(corr.any);
       REQUIRE(chi2.any);
-      const double tolCov = (v == kStiffVariant) ? kTolTwinStiff : kTolTwin;
-      const double tolChi2 = (v == kStiffVariant) ? kTolTwinStiffChi2 : kTolTwin;
+      const double_st tolCov = (v == kStiffVariant) ? kTolTwinStiff : kTolTwin;
+      const double_st tolChi2 = (v == kStiffVariant) ? kTolTwinStiffChi2 : kTolTwin;
       REQUIRE(cov.v < tolCov);
       REQUIRE(corr.v < tolCov);
       REQUIRE(chi2.v < tolChi2);
-      REQUIRE(std::isfinite(sig1R[v]));
+      REQUIRE(isfinite(sig1R[v]));
       REQUIRE(sig1R[v] > 0.);
     }
 
     std::printf(
         "  sigma(1/R) (a)/(b) = %.3f  [asserted inside the bracket, see the file head]   (g)/(a) = %.3f "
         " [(g) is NOT bounded]\n",
-        sig1R[0] / sig1R[1],
-        sig1R[6] / sig1R[0]);
+        static_cast<double>(sig1R[0] / sig1R[1]),
+        static_cast<double>(sig1R[6] / sig1R[0]));
 
     // theorems: loosening the kinks cannot tighten the curvature, and an isotropic kink is the tighter one.
     REQUIRE(sig1R[3] <= sig1R[4] * (1. + kMonoSlack));  // stiff  <= MS x0.1

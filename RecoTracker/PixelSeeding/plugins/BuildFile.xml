@@ -28,6 +28,7 @@
 
 <library file="alpaka/*.cc" name="RecoTrackerPixelSeedingPortable">
   <use name="alpaka"/>
+  <use name="cadna"/>
   <use name="DataFormats/BeamSpot"/>
   <use name="DataFormats/Common"/>
   <use name="DataFormats/Math"/>
@@ -46,6 +47,7 @@
   <use name="RecoLocalTracker/Records"/>
   <use name="RecoLocalTracker/SiPixelRecHits"/>
   <use name="RecoTracker/PixelTrackFitting"/>
+  <use name="Utilities/Cadna" source_only="1"/>
   <!-- work around for cms-sw/cmssw#45179 -->
   <use name="no-array-bounds-flag" for="alpaka/serial"/>
   <!-- Compile the device code of this library in a single nvcc partition: split compilation is not deterministic. -->

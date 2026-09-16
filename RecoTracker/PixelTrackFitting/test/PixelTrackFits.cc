@@ -16,23 +16,27 @@
 #include "RecoTracker/PixelTrackFitting/interface/RiemannFit.h"
 #endif
 
+#include "Utilities/Cadna/interface/CadnaEigenTypes.h"
+
 using namespace std;
 using namespace Eigen;
 using namespace riemannFit;
 using std::unique_ptr;
 
+using Vector5d = Eigen::Vector<double_st, 5>;
+
 namespace riemannFit {
   using Vector3i = Eigen::Matrix<int, 3, 1>;
   using Vector4i = Eigen::Matrix<int, 4, 1>;
-  using Vector6d = Eigen::Matrix<double, 6, 1>;
-  using Vector8d = Eigen::Matrix<double, 8, 1>;
+  using Vector6d = Eigen::Matrix<double_st, 6, 1>;
+  using Vector8d = Eigen::Matrix<double_st, 8, 1>;
 };  // namespace riemannFit
 
 // quadruplets...
 struct hits_gen {
   Matrix3xNd<4> hits;
-  Eigen::Matrix<float, 6, 4> hits_ge;
-  Vector5d true_par;
+  Eigen::Matrix<float_st, 6, 4> hits_ge;
+  Eigen::Vector<double_st, 5> true_par;
 };
 
 struct geometry {
@@ -55,7 +59,7 @@ constexpr int c_speed = 299792458;
 constexpr double pi = M_PI;
 default_random_engine generator(1);
 
-void smearing(const Vector5d& err, const bool& isbarrel, double& x, double& y, double& z) {
+void smearing(const Vector5d& err, const bool& isbarrel, double_st& x, double_st& y, double_st& z) {
   normal_distribution<double> dist_R(0., err[0]);
   normal_distribution<double> dist_Rp(0., err[1]);
   normal_distribution<double> dist_z(0., err[2]);
@@ -76,7 +80,7 @@ void smearing(const Vector5d& err, const bool& isbarrel, double& x, double& y, d
 }
 
 template <int N>
-void Hits_cov(Eigen::Matrix<float, 6, 4>& V,
+void Hits_cov(Eigen::Matrix<float_st, 6, 4>& V,
               const unsigned int& i,
               const unsigned int& n,
               const Matrix3xNd<N>& hits,
@@ -99,10 +103,10 @@ void Hits_cov(Eigen::Matrix<float, 6, 4>& V,
   }
 }
 
-hits_gen Hits_gen(const unsigned int& n, const Matrix<double, 6, 1>& gen_par) {
+hits_gen Hits_gen(const unsigned int& n, const Matrix<double_st, 6, 1>& gen_par) {
   hits_gen gen;
-  gen.hits = MatrixXd::Zero(3, n);
-  gen.hits_ge = Eigen::Matrix<float, 6, 4>::Zero();
+  gen.hits = Eigen::Matrix<double_st, Eigen::Dynamic, Eigen::Dynamic>::Zero(3, n);
+  gen.hits_ge = Eigen::Matrix<float_st, 6, 4>::Zero();
   // err /= 10000.;
   constexpr double rad[8] = {2.95, 6.8, 10.9, 16., 3.1, 7., 11., 16.2};
   // constexpr double R_err[8] = {5./10000, 5./10000, 5./10000, 5./10000, 5./10000,
@@ -115,16 +119,16 @@ hits_gen Hits_gen(const unsigned int& n, const Matrix<double, 6, 1>& gen_par) {
       35. / 10000, 18. / 10000, 15. / 10000, 34. / 10000, 35. / 10000, 18. / 10000, 15. / 10000, 34. / 10000};
   constexpr double z_err[8] = {
       72. / 10000, 38. / 10000, 25. / 10000, 56. / 10000, 72. / 10000, 38. / 10000, 25. / 10000, 56. / 10000};
-  const double x2 = gen_par(0) + gen_par(4) * cos(gen_par(3) * pi / 180);
-  const double y2 = gen_par(1) + gen_par(4) * sin(gen_par(3) * pi / 180);
-  const double alpha = atan2(y2, x2);
+  const double_st x2 = gen_par(0) + gen_par(4) * cos(gen_par(3) * pi / 180);
+  const double_st y2 = gen_par(1) + gen_par(4) * sin(gen_par(3) * pi / 180);
+  const double_st alpha = atan2(y2, x2);
 
   for (unsigned int i = 0; i < n; ++i) {
-    const double a = gen_par(4);
-    const double b = rad[i];
-    const double c = sqrt(riemannFit::sqr(x2) + riemannFit::sqr(y2));
-    const double beta = acos((riemannFit::sqr(a) - riemannFit::sqr(b) - riemannFit::sqr(c)) / (-2. * b * c));
-    const double gamma = alpha + beta;
+    const double_st a = gen_par(4);
+    const double_st b = rad[i];
+    const double_st c = sqrt(riemannFit::sqr(x2) + riemannFit::sqr(y2));
+    const double_st beta = acos((riemannFit::sqr(a) - riemannFit::sqr(b) - riemannFit::sqr(c)) / (-2. * b * c));
+    const double_st gamma = alpha + beta;
     gen.hits(0, i) = rad[i] * cos(gamma);
     gen.hits(1, i) = rad[i] * sin(gamma);
     gen.hits(2, i) =
@@ -145,8 +149,8 @@ hits_gen Hits_gen(const unsigned int& n, const Matrix<double, 6, 1>& gen_par) {
 
 Vector5d True_par(const Matrix<double, 6, 1>& gen_par, const int& charge, const double& B_field) {
   Vector5d true_par;
-  const double x0 = gen_par(0) + gen_par(4) * cos(gen_par(3) * pi / 180);
-  const double y0 = gen_par(1) + gen_par(4) * sin(gen_par(3) * pi / 180);
+  const double_st x0 = gen_par(0) + gen_par(4) * cos(gen_par(3) * pi / 180);
+  const double_st y0 = gen_par(1) + gen_par(4) * sin(gen_par(3) * pi / 180);
   CircleFit circle;
   circle.par << x0, y0, gen_par(4);
   circle.qCharge = 1;
@@ -333,7 +337,7 @@ void computePull(std::array<Fit, N>& fit, const char* label, int n_, int iterati
 
 void test_helix_fit(bool getcin) {
   int n_;
-  const double B_field = 3.8 * c_speed / pow(10, 9) / 100;
+  const double_st B_field = 3.8 * c_speed / pow(10, 9) / 100;
   Matrix<double, 6, 1> gen_par;
   Vector5d true_par;
   generator.seed(1);

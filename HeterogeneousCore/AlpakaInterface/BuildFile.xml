@@ -1,7 +1,9 @@
 <use name="alpaka"/>
 <use name="boost_header"/>
+<use name="cadna"/>
 <use name="fmt"/>
 <use name="FWCore/Utilities"/>
+<use name="Utilities/Cadna" source_only="1"/>
 <export>
   <lib name="1"/>
 </export>

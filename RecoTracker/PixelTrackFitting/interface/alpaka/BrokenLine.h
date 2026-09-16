@@ -12,6 +12,8 @@
 #include "RecoTracker/PixelTrackFitting/interface/alpaka/BandedSolve.h"  // bandFactor / bandSolveInPlace
 #include "RecoTracker/PixelTrackFitting/interface/BLMaterialMap.h"       // Geant4 rho(r,z) -> segment X/X0
 
+#include "Utilities/Cadna/interface/CadnaEigenTypes.h"
+
 //#define BL_DEEPDEBUG
 
 // Fast Broken Line helix fit (circle + line, Blobel NIM A566 (2006) 14) for the device. The bordered-pentadiagonal
@@ -48,7 +50,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
     |cov(phi,phi)|cov( d ,phi)|cov( k ,phi)| \n
     |cov(phi, d )|cov( d , d )|cov( k , d )| \n
     |cov(phi, k )|cov( d , k )|cov( k , k )| \n
-    as defined in Karimäki V., 1990, Effective circle fitting for particle trajectories, 
+    as defined in Karimäki V., 1990, Effective circle fitting for particle trajectories,
     Nucl. Instr. and Meth. A305 (1991) 187.
   */
   using karimaki_circle_fit = riemannFit::CircleFit;
@@ -110,8 +112,8 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
     LegacyMapVecNd<n, S> zInSZplane;
     LegacyMapVecNd<n, S> varBeta;
     LegacyMapVecNd<n, S> matXX0;
-    double innerXX0;
-    ALPAKA_FN_ACC explicit PreparedBrokenLineDataMap(double* p)
+    double_st innerXX0;
+    ALPAKA_FN_ACC explicit PreparedBrokenLineDataMap(double_st* p)
         : radii(p),
           sTransverse(p + std::size_t(2 * n) * S),
           sTotal(p + std::size_t(3 * n) * S),
@@ -128,11 +130,11 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
   struct LegacyFitWorkspaceMap {
     static constexpr int kN = n;
     static constexpr int laneStride = int(S);
-    double* bandMb;
-    double* bandCbor;
-    double* bandCorner;
-    double* bandW;
-    double* bandMs;
+    double_st* bandMb;
+    double_st* bandCbor;
+    double_st* bandCorner;
+    double_st* bandW;
+    double_st* bandMs;
     LegacyMap2xNd<n, S> pointsSZ;
     LegacyMapVecNd<n, S> zVec;
     // Second mapping of zVec's n slots (see the layout note above): the running per-node material column
@@ -146,7 +148,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
     LegacyMapVecNplus1d<n, S> circleRu;
     LegacyMapVecNplus1d<n, S> circleU;
     LegacyMapVecNd<n, S> varBetaOff;
-    ALPAKA_FN_ACC explicit LegacyFitWorkspaceMap(double* p)
+    ALPAKA_FN_ACC explicit LegacyFitWorkspaceMap(double_st* p)
         : bandMb(p),
           bandCbor(p + std::size_t(3 * n) * S),
           bandCorner(p + std::size_t(4 * n) * S),
@@ -182,7 +184,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
     riemannFit::VectorNd<n> sTransverse;  //!< arc length in the transverse plane from the pre-fitted PCA
     riemannFit::VectorNd<n> sTotal;       //!< total distance traveled (three-dimensional)
     riemannFit::VectorNd<n> matXX0;       //!< X/X0 of segment i->i+1 from the Geant4 material map
-    double innerXX0;                      //!< X/X0 from the beamline (IP) to the first hit (beam pipe + upstream)
+    double_st innerXX0;                      //!< X/X0 from the beamline (IP) to the first hit (beam pipe + upstream)
   };
 
   // X/X0 integrated along the straight segment (r0,z0)->(r1,z1) through the Geant4 density map, r,z from the
@@ -192,18 +194,18 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
   // false gives every sample the full weight dl = L/(nseg-1), so a layer sitting on a hit is counted in both
   // adjacent segments.
   template <alpaka::concepts::Acc TAcc>
-  ALPAKA_FN_ACC ALPAKA_FN_INLINE double segmentXX0(
-      const TAcc& acc, const float* rho, double r0, double z0, double r1, double z1, bool trapezoid = false) {
-    const double L = alpaka::math::sqrt(acc, (r1 - r0) * (r1 - r0) + (z1 - z0) * (z1 - z0));
+  ALPAKA_FN_ACC ALPAKA_FN_INLINE double_st segmentXX0(
+      const TAcc& acc, const float* rho, double_st r0, double_st z0, double_st r1, double_st z1, bool trapezoid = false) {
+    const double_st L = alpaka::math::sqrt(acc, (r1 - r0) * (r1 - r0) + (z1 - z0) * (z1 - z0));
     int nseg = int(2. * L);
     if (nseg < 2)
       nseg = 2;
-    const double dl = L / (nseg - 1);
-    double xx0 = 0.;
+    const double_st dl = L / (nseg - 1);
+    double_st xx0 = 0.;
     for (int k = 0; k < nseg; ++k) {
-      const double f = double(k) / (nseg - 1);
+      const double_st f = static_cast<double_st>(k) / (nseg - 1);
       // the endpoint half-weight is applied to dl itself; every other sample carries dl unscaled.
-      const double w = (trapezoid && (k == 0 || k == nseg - 1)) ? 0.5 * dl : dl;
+      const double_st w = (trapezoid && (k == 0 || k == nseg - 1)) ? 0.5 * dl : dl;
       xx0 += blMaterialMap::rhoAt(rho, float(r0 + f * (r1 - r0)), float(z0 + f * (z1 - z0))) * w;
     }
     return xx0;  // dimensionless X/X0
@@ -223,11 +225,37 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
     if (nseg < 2)
       nseg = 2;
     const double dl = L / (nseg - 1);
-    double W = 0., S1 = 0., S2 = 0.;
+    double_st W = 0., S1 = 0., S2 = 0.;
     for (int k = 0; k < nseg; ++k) {
       const double f = double(k) / (nseg - 1);
       const double q = blMaterialMap::rhoAt(rho, float(r0 + f * (r1 - r0)), float(z0 + f * (z1 - z0))) * dl;
       const double d = (1. - f) * L;
+      W += q;
+      S1 += q * d;
+      S2 += q * d * d;
+    }
+    d1 = 0.;
+    w1 = 0.;
+    if (W > 0. && S1 > 0. && S2 > 0.) {
+      d1 = S2 / S1;
+      w1 = S1 * S1 / (S2 * W);  // in (0, 1] by Cauchy-Schwarz
+    }
+    return W;  // total X/X0, identical to segmentXX0 up to rounding
+  }
+
+  template <alpaka::concepts::Acc TAcc>
+  ALPAKA_FN_ACC ALPAKA_FN_INLINE double_st segmentXX0Moments(
+      const TAcc& acc, const float* rho, double_st r0, double_st z0, double_st r1, double_st z1, double_st& d1, double_st& w1) {
+    const double_st L = alpaka::math::sqrt(acc, (r1 - r0) * (r1 - r0) + (z1 - z0) * (z1 - z0));
+    int nseg = int(2. * L);
+    if (nseg < 2)
+      nseg = 2;
+    const double_st dl = L / (nseg - 1);
+    double_st W = 0., S1 = 0., S2 = 0.;
+    for (int k = 0; k < nseg; ++k) {
+      const double_st f = static_cast<double_st>(k) / (nseg - 1);
+      const double_st q = blMaterialMap::rhoAt(rho, float(r0 + f * (r1 - r0)), float(z0 + f * (z1 - z0))) * dl;
+      const double_st d = (1. - f) * L;
       W += q;
       S1 += q * d;
       S2 += q * d * d;
@@ -248,29 +276,29 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
   // segment's total AND its first moment about either end exactly (a single kink at the arrival node models
   // the first moment as zero). Returns W, the same value segmentXX0 returns for the same `trapezoid`.
   template <alpaka::concepts::Acc TAcc>
-  ALPAKA_FN_ACC ALPAKA_FN_INLINE double segmentXX0Endpoint(const TAcc& acc,
+  ALPAKA_FN_ACC ALPAKA_FN_INLINE double_st segmentXX0Endpoint(const TAcc& acc,
                                                            const float* rho,
-                                                           double r0,
-                                                           double z0,
-                                                           double r1,
-                                                           double z1,
-                                                           double& fDep,
+                                                           double_st r0,
+                                                           double_st z0,
+                                                           double_st r1,
+                                                           double_st z1,
+                                                           double_st& fDep,
                                                            bool trapezoid = false) {
-    const double L = alpaka::math::sqrt(acc, (r1 - r0) * (r1 - r0) + (z1 - z0) * (z1 - z0));
+    const double_st L = alpaka::math::sqrt(acc, (r1 - r0) * (r1 - r0) + (z1 - z0) * (z1 - z0));
     int nseg = int(2. * L);
     if (nseg < 2)
       nseg = 2;
-    const double dl = L / (nseg - 1);
-    double W = 0., S1overL = 0.;
+    const double_st dl = L / (nseg - 1);
+    double_st W = 0., S1overL = 0.;
     for (int k = 0; k < nseg; ++k) {
-      const double f = double(k) / (nseg - 1);
+      const double_st f = static_cast<double_st>(k) / (nseg - 1);
       // the endpoint half-weight is applied to dl itself; every other sample carries dl unscaled.
-      const double w = (trapezoid && (k == 0 || k == nseg - 1)) ? 0.5 * dl : dl;
-      const double q = blMaterialMap::rhoAt(rho, float(r0 + f * (r1 - r0)), float(z0 + f * (z1 - z0))) * w;
+      const double_st w = (trapezoid && (k == 0 || k == nseg - 1)) ? 0.5 * dl : dl;
+      const double_st q = blMaterialMap::rhoAt(rho, float(r0 + f * (r1 - r0)), float(z0 + f * (z1 - z0))) * w;
       W += q;
       S1overL += q * (1. - f);  // (1-f) == d/L, so this accumulates S1/L directly (no division by L, L>0 free)
     }
-    fDep = (W > 0.) ? S1overL / W : 0.;  // in [0,1] by construction: every sample contributes (1-f) in [0,1]
+    fDep = (W > 0.) ? S1overL / W : static_cast<double_st>(0.);  // in [0,1] by construction: every sample contributes (1-f) in [0,1]
     return W;                            // total X/X0, the same value as segmentXX0(..., trapezoid)
   }
 
@@ -282,18 +310,18 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
   // Cauchy-Schwarz (equality when the sampled measure is a single atom) and d1 in (0, L]; the caller handles
   // those limits (prepareGblDataSplit). Returns W, the same value as segmentXX0(..., trapezoid=true).
   template <alpaka::concepts::Acc TAcc>
-  ALPAKA_FN_ACC ALPAKA_FN_INLINE double segmentXX0GapSplit(
-      const TAcc& acc, const float* rho, double r0, double z0, double r1, double z1, double& d1, double& w1) {
-    const double L = alpaka::math::sqrt(acc, (r1 - r0) * (r1 - r0) + (z1 - z0) * (z1 - z0));
+  ALPAKA_FN_ACC ALPAKA_FN_INLINE double_st segmentXX0GapSplit(
+      const TAcc& acc, const float* rho, double_st r0, double_st z0, double_st r1, double_st z1, double_st& d1, double_st& w1) {
+    const double_st L = alpaka::math::sqrt(acc, (r1 - r0) * (r1 - r0) + (z1 - z0) * (z1 - z0));
     int nseg = int(2. * L);
     if (nseg < 2)
       nseg = 2;
-    const double dl = L / (nseg - 1);
-    double W = 0., S1overL = 0., S2overL2 = 0.;
+    const double_st dl = L / (nseg - 1);
+    double_st W = 0., S1overL = 0., S2overL2 = 0.;
     for (int k = 0; k < nseg; ++k) {
-      const double f = double(k) / (nseg - 1);
-      const double w = (k == 0 || k == nseg - 1) ? 0.5 * dl : dl;
-      const double q = blMaterialMap::rhoAt(rho, float(r0 + f * (r1 - r0)), float(z0 + f * (z1 - z0))) * w;
+      const double_st f = static_cast<double_st>(k) / (nseg - 1);
+      const double_st w = (k == 0 || k == nseg - 1) ? 0.5 * dl : dl;
+      const double_st q = blMaterialMap::rhoAt(rho, float(r0 + f * (r1 - r0)), float(z0 + f * (z1 - z0))) * w;
       W += q;
       S1overL += q * (1. - f);              // (1-f) == d/L, so this accumulates S1/L directly
       S2overL2 += q * (1. - f) * (1. - f);  // and this S2/L^2
@@ -330,11 +358,11 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
     \return the variance of the planar angle ((theta_0)^2 /3).
   */
   template <alpaka::concepts::Acc TAcc>
-  ALPAKA_FN_ACC ALPAKA_FN_INLINE double multScatt(const TAcc& acc,
-                                                  const double radLen,
-                                                  const double bField,
-                                                  const double radius,
-                                                  double slope,
+  ALPAKA_FN_ACC ALPAKA_FN_INLINE double_st multScatt(const TAcc& acc,
+                                                  const double_st radLen,
+                                                  const double_st bField,
+                                                  const double_st radius,
+                                                  double_st slope,
                                                   bool pionBeta = false) {
     if (radLen <= 0.)
       return 0.;
@@ -342,13 +370,14 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
       // Corrections package: full Highland theta0^2 (geometry factor 1.0), pion 1/beta, no pt cap.
       constexpr double fact = riemannFit::sqr(13.6 / 1000.);
       constexpr double kPionMass = 0.13957;  // GeV (PDG)
-      const double p2 = riemannFit::sqr(bField * radius) * (1. + riemannFit::sqr(slope));
-      const double p2b2 = p2 * p2 / (p2 + riemannFit::sqr(kPionMass));
+      const double_st p2 = riemannFit::sqr(bField * radius) * (1. + riemannFit::sqr(slope));
+      const double_st p2b2 = p2 * p2 / (p2 + riemannFit::sqr(kPionMass));
       return fact / p2b2 * radLen * riemannFit::sqr(1. + 0.038 * log(radLen));
     }
     // Corrections off: upstream's multScatt exactly (geometry factor 0.7, pt capped at 20 GeV). Any deviation
     // here shifts the emitted covariances and moves the fixed high-purity selector working point.
-    auto pt2 = alpaka::math::min(acc, 20., bField * radius);
+    // auto pt2 = alpaka::math::min(acc, 20., bField * radius);
+    auto pt2 = fmin(20., bField * radius);
     pt2 *= pt2;
     constexpr double fact = 0.7 * riemannFit::sqr(13.6 / 1000.);
     return fact / (pt2 * (1. + riemannFit::sqr(slope))) * radLen * riemannFit::sqr(1. + 0.038 * log(radLen));
@@ -356,15 +385,16 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
 
   /*!
     \brief Computes the 2D rotation matrix that transforms the line y=slope*x into the line y=0.
-    
+
     \param slope tangent of the angle of rotation.
-    
+
     \return 2D rotation matrix.
   */
   template <alpaka::concepts::Acc TAcc>
-  ALPAKA_FN_ACC ALPAKA_FN_INLINE riemannFit::Matrix2d rotationMatrix(const TAcc& acc, double slope) {
+  ALPAKA_FN_ACC ALPAKA_FN_INLINE riemannFit::Matrix2d rotationMatrix(const TAcc& acc, double_st slope) {
     riemannFit::Matrix2d rot;
-    rot(0, 0) = 1. / alpaka::math::sqrt(acc, 1. + riemannFit::sqr(slope));
+    // rot(0, 0) = 1. / alpaka::math::sqrt(acc, 1. + riemannFit::sqr(slope));
+    rot(0, 0) = 1. / sqrt(1. + riemannFit::sqr(slope));
     rot(0, 1) = slope * rot(0, 0);
     rot(1, 0) = -rot(0, 1);
     rot(1, 1) = rot(0, 0);
@@ -372,19 +402,19 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
   }
 
   /*!
-    \brief Changes the Karimäki parameters (and consequently their covariance matrix) under a 
-   *       translation of the coordinate system, such that the old origin has coordinates (x0,y0) 
-   *       in the new coordinate system. The formulas are taken from Karimäki V., 1990, Effective 
+    \brief Changes the Karimäki parameters (and consequently their covariance matrix) under a
+   *       translation of the coordinate system, such that the old origin has coordinates (x0,y0)
+   *       in the new coordinate system. The formulas are taken from Karimäki V., 1990, Effective
    *       circle fitting for particle trajectories, Nucl. Instr. and Meth. A305 (1991) 187.
-    
-    \param circle circle fit in the old coordinate system. circle.par(0) is phi, circle.par(1) is d and circle.par(2) is rho. 
+
+    \param circle circle fit in the old coordinate system. circle.par(0) is phi, circle.par(1) is d and circle.par(2) is rho.
     \param x0 x coordinate of the translation vector.
     \param y0 y coordinate of the translation vector.
     \param jacobian passed by reference in order to save stack.
   */
   template <alpaka::concepts::Acc TAcc>
   ALPAKA_FN_ACC ALPAKA_FN_INLINE void translateKarimaki(
-      const TAcc& acc, karimaki_circle_fit& circle, double x0, double y0, riemannFit::Matrix3d& jacobian) {
+      const TAcc& acc, karimaki_circle_fit& circle, double_st x0, double_st y0, riemannFit::Matrix3d& jacobian) {
     // Avoid multiple access to the circle.par vector.
     using scalar = typename std::remove_reference<decltype(circle.par(0))>::type;
     scalar phi = circle.par(0);
@@ -427,7 +457,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
 
   /*!
     \brief Computes the data needed for the Broken Line fit procedure that are mainly common for the circle and the line fit.
-    
+
     \param hits hits coordinates.
     \param fast_fit pre-fit result in the form (X0,Y0,R,tan(theta)).
     \param bField magnetic field in Gev/cm/c.
@@ -447,7 +477,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
   ALPAKA_FN_ACC ALPAKA_FN_INLINE void __attribute__((always_inline)) prepareBrokenLineData(const TAcc& acc,
                                                                                            const M3xN& hits,
                                                                                            const V4& fast_fit,
-                                                                                           const double bField,
+                                                                                           const double_st bField,
                                                                                            const float* rho,
                                                                                            TData& results,
                                                                                            TWs& fitWs,
@@ -469,7 +499,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
     eVec = hits.block(0, n - 1, 2, 1) - hits.block(0, mId, 2, 1);
     results.qCharge = riemannFit::cross2D(acc, dVec, eVec) > 0 ? -1 : 1;
 
-    const double slope = -results.qCharge / fast_fit(3);
+    const double_st slope = -results.qCharge / fast_fit(3);
 
     riemannFit::Matrix2d rotMat = rotationMatrix(acc, slope);
 
@@ -527,10 +557,10 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
         results.matXX0(i) = 0.;
       // Running plain column for the dE/dx offset (elossGaps): gapXX0(g) = sum of the gap totals 0..g, i.e. the
       // material between hit 0 and node g+1, from the same map samples the partition uses.
-      double xx0Run = 0.;
+      double_st xx0Run = 0.;
       for (u_int g = 0; g < n - 1; g++) {
-        double fDep = 0.5;  // overwritten by segmentXX0Endpoint (uniform density => lever L/2)
-        double xx0;
+        double_st fDep = 0.5;  // overwritten by segmentXX0Endpoint (uniform density => lever L/2)
+        double_st xx0;
         xx0 = segmentXX0Endpoint(acc, rho, rOf(g), hits(2, g), rOf(g + 1), hits(2, g + 1), fDep, true);
         results.matXX0(g) += (1. - fDep) * xx0;  // arrival share   -> node g+1 -> slot g
         if (g > 0)
@@ -560,7 +590,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
     // over-covered, as in the CKF; prepareGblFitData applies the same rule.
     const bool useInner = true;
     if (fitCorrections) {
-      results.innerXX0 = useInner ? segmentXX0(acc, rho, 0., 0., rOf(0), hits(2, 0), fitCorrections) : 0.;
+      results.innerXX0 = useInner ? segmentXX0(acc, rho, 0., 0., rOf(0), hits(2, 0), fitCorrections) : static_cast<double_st>(0.);
     } else {
       // Corrections OFF: upstream adds the innermost multiple-scattering term from the FIRST GAP's
       // length -- multScatt(sTotal(1) - sTotal(0), ...) -- not from a beamline material integral.
@@ -607,12 +637,12 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
   ALPAKA_FN_ACC ALPAKA_FN_INLINE void __attribute__((always_inline)) prepareGblFitData(const TAcc& acc,
                                                                                        const M3xN& hits,
                                                                                        const V4& fast_fit,
-                                                                                       const double bField,
+                                                                                       const double_st bField,
                                                                                        const float* rho,
                                                                                        PreparedGblData<n>& results,
                                                                                        const double* matCached = nullptr,
-                                                                                       double* gapD1 = nullptr,
-                                                                                       double* gapW1 = nullptr) {
+                                                                                       double_st* gapD1 = nullptr,
+                                                                                       double_st* gapW1 = nullptr) {
     riemannFit::Vector2d dVec;
     riemannFit::Vector2d eVec;
 
@@ -628,7 +658,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
     eVec = hits.block(0, n - 1, 2, 1) - hits.block(0, mId, 2, 1);
     results.qCharge = riemannFit::cross2D(acc, dVec, eVec) > 0 ? -1 : 1;
 
-    const double slope = -results.qCharge / fast_fit(3);
+    const double_st slope = -results.qCharge / fast_fit(3);
     riemannFit::Matrix2d rotMat = rotationMatrix(acc, slope);
 
     // arc length s in the transverse plane; the radii column (hit - pre-fit centre) is computed inline, not stored.
@@ -637,7 +667,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
       dVec = hits.block(0, i, 2, 1) - fast_fit.head(2);
       results.sTransverse(i) =
           results.qCharge * fast_fit(2) *
-          alpaka::math::atan2(acc, riemannFit::cross2D(acc, dVec, eVec), dVec.dot(eVec));  // calculates the arc length
+          alpaka::math::atan2(acc, static_cast<double_st>(riemannFit::cross2D(acc, dVec, eVec)), dVec.dot(eVec));  // calculates the arc length
     }
     riemannFit::VectorNd<n> zVec = hits.block(2, 0, 1, n).transpose();
 
@@ -674,8 +704,8 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
     for (u_int i = 0; i < n; i++)
       results.matXX0(i) = 0.;
     for (u_int g = 0; g < n - 1; g++) {
-      double d1 = 0., w1 = 0.;
-      const double xx0 = segmentXX0GapSplit(acc, rho, rOf(g), hits(2, g), rOf(g + 1), hits(2, g + 1), d1, w1);
+      double_st d1 = 0., w1 = 0.;
+      const double_st xx0 = segmentXX0GapSplit(acc, rho, rOf(g), hits(2, g), rOf(g + 1), hits(2, g + 1), d1, w1);
       results.matXX0(g) = xx0;  // slot g = the WHOLE of gap g; prepareGblDataSplit places it
       if (gapD1 != nullptr) {
         gapD1[g] = d1;
@@ -693,19 +723,19 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
     // rule would give both endpoint samples full weight, over-integrating this segment and double-counting the
     // hit-0 layer bin it shares with gap 0).
     const bool useInner = true;
-    results.innerXX0 = useInner ? segmentXX0(acc, rho, 0., 0., rOf(0), hits(2, 0), /*trapezoid=*/true) : 0.;
+    results.innerXX0 = useInner ? segmentXX0(acc, rho, 0., 0., rOf(0), hits(2, 0), /*trapezoid=*/true) : static_cast<double_st>(0.);
   }
 
   /*!
-    \brief Computes the n-by-n band matrix obtained minimizing the Broken Line's cost function w.r.t u. 
-   *       This is the whole matrix in the case of the line fit and the main n-by-n block in the case 
+    \brief Computes the n-by-n band matrix obtained minimizing the Broken Line's cost function w.r.t u.
+   *       This is the whole matrix in the case of the line fit and the main n-by-n block in the case
    *       of the circle fit.
-    
-    \param weights weights of the first part of the cost function, the one with the measurements 
+
+    \param weights weights of the first part of the cost function, the one with the measurements
    *         and not the angles (\sum_{i=1}^n w*(y_i-u_i)^2).
     \param sTotal total distance traveled by the particle from the pre-fitted closest approach.
     \param varBeta kink angles' variance.
-    
+
     \return the n-by-n matrix of the linear system
   */
   // Builds the symmetric band matrix directly in the caller-provided `out` (an n-by-n block of the bordered
@@ -747,10 +777,10 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
       out(i, i) *= 0.5;
     }
     for (u_int i = 0; i < n; i++) {
-      const double td = out(i, i);
+      const double_st td = out(i, i);
       out(i, i) = td + td;
       for (u_int j = i + 1; j < n; j++) {
-        const double t = out(i, j);
+        const double_st t = out(i, j);
         out(i, j) = t + 0.;
         out(j, i) = 0. + t;
       }
@@ -778,9 +808,9 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
   // row 1 offset 2) are never read by the solver and are intentionally left unwritten.
   template <typename VW, typename VS, typename VB, int n = VW::RowsAtCompileTime>
   ALPAKA_FN_ACC ALPAKA_FN_INLINE void matrixC_uBandLower(
-      const VW& weights, const VS& sTotal, const VB& varBeta, double* Mb, int lstride) {
+      const VW& weights, const VS& sTotal, const VB& varBeta, double_st* Mb, int lstride) {
     for (u_int i = 0; i < n; i++) {
-      double d = weights(i);
+      double_st d = weights(i);
       if (i > 1)
         d += 1. / (varBeta(i - 1) * riemannFit::sqr(sTotal(i) - sTotal(i - 1)));
       if (i > 0 && i < n - 1)
@@ -791,7 +821,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
       Mb[(i * 3) * lstride] = d;  // M(i,i)
 
       if (i + 1 < n) {  // M(i, i+1) = M(i+1, i), stored lower-packed at row i+1 offset 1
-        double o1 = 0.;
+        double_st o1 = 0.;
         if (i > 0 && i < n - 1)
           o1 = 1. / (varBeta(i) * (sTotal(i + 1) - sTotal(i))) *
                (-(sTotal(i + 1) - sTotal(i - 1)) / ((sTotal(i + 1) - sTotal(i)) * (sTotal(i) - sTotal(i - 1))));
@@ -810,13 +840,13 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
   // c(n,n). Verbatim the circleFit border build (matrixC_u border block), with c_uMat(i,n) -> cbor[i] and
   // c_uMat(n,n) -> the returned scalar; the symmetric c_uMat(n,i) copy is implicit (never stored separately).
   template <typename VS, typename VB, int n = VS::RowsAtCompileTime>
-  ALPAKA_FN_ACC ALPAKA_FN_INLINE double circleBorderLower(const VS& sTransverse,
+  ALPAKA_FN_ACC ALPAKA_FN_INLINE double_st circleBorderLower(const VS& sTransverse,
                                                           const VB& varBeta,
-                                                          double* cbor,
+                                                          double_st* cbor,
                                                           int lstride) {
-    double corner = 0.;
+    double_st corner = 0.;
     for (u_int i = 0; i < n; i++) {
-      double b = 0.;
+      double_st b = 0.;
       if (i > 0 && i < n - 1)
         b += -(sTransverse(i + 1) - sTransverse(i - 1)) * (sTransverse(i + 1) - sTransverse(i - 1)) /
              (2. * varBeta(i) * (sTransverse(i + 1) - sTransverse(i)) * (sTransverse(i) - sTransverse(i - 1)));
@@ -833,11 +863,11 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
 
   /*!
     \brief A very fast helix fit.
-    
+
     \param hits the measured hits.
-    
+
     \return (X0,Y0,R,tan(theta)).
-    
+
     \warning sign of theta is (intentionally, for now) mistaken for negative charges.
   */
 
@@ -878,9 +908,9 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
   }
 
   /*!
-    \brief Performs the Broken Line fit in the curved track case (that is, the fit 
+    \brief Performs the Broken Line fit in the curved track case (that is, the fit
    *       parameters are the interceptions u and the curvature correction \Delta\kappa).
-    
+
     \param hits hits coordinates.
     \param hits_cov hits covariance matrix.
     \param fast_fit pre-fit result in the form (X0,Y0,R,tan(theta)).
@@ -890,7 +920,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
     -par parameter of the line in this form: (phi, d, k); \n
     -cov covariance matrix of the fitted parameter; \n
     -chi2 value of the cost function in the minimum.
-    
+
     \param fitCorrections selects the fast-BL scattering/covariance package (see the file head): the reference
            hit of the circle frame, the momentum factor multScatt uses, and whether the covariance blend runs
            (with corrections off it is skipped and the emitted covariance is upstream's).
@@ -902,12 +932,12 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
 
     \details The function implements the steps 2 and 3 of the Broken Line fit
    *         with the curvature correction.\n
-   * The step 2 is the least square fit, done by imposing the minimum constraint on 
-   * the cost function and solving the consequent linear system. It determines the 
+   * The step 2 is the least square fit, done by imposing the minimum constraint on
+   * the cost function and solving the consequent linear system. It determines the
    * fitted parameters u and \Delta\kappa and their covariance matrix.
-   * The step 3 is the correction of the fast pre-fitted parameters for the innermost 
-   * part of the track. It is first done in a comfortable coordinate system (the one 
-   * in which the first hit is the origin) and then the parameters and their 
+   * The step 3 is the correction of the fast pre-fitted parameters for the innermost
+   * part of the track. It is first done in a comfortable coordinate system (the one
+   * in which the first hit is the origin) and then the parameters and their
    * covariance matrix are transformed to the original coordinate system.
   */
   template <alpaka::concepts::Acc TAcc,
@@ -921,18 +951,18 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
                                                 const M3xN& hits,
                                                 const M6xN& hits_ge,
                                                 const V4& fast_fit,
-                                                const double bField,
+                                                const double_st bField,
                                                 TData& data,
                                                 karimaki_circle_fit& circle_results,
                                                 TWs& fitWs,
                                                 bool fitCorrections = false,
-                                                double elossCurvPerXX0 = 0.) {
+                                                double_st elossCurvPerXX0 = 0.) {
     circle_results.qCharge = data.qCharge;
     auto& radii = data.radii;
     const auto& sTransverse = data.sTransverse;
     auto& zInSZplane = data.zInSZplane;
     auto& varBeta = data.varBeta;
-    const double slope = -circle_results.qCharge / fast_fit(3);
+    const double_st slope = -circle_results.qCharge / fast_fit(3);
     varBeta *= 1. + riemannFit::sqr(slope);  // the kink angles are projected!
 
     for (u_int i = 0; i < n; i++) {
@@ -953,13 +983,13 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
     const bool eloss = (elossCurvPerXX0 > 0.);
     auto& uEloss = fitWs.gapXX0;  // in: running column from hit 0 per node; out: the dE/dx residual offset
     if (eloss) {
-      double xPrev = data.innerXX0;             // material column at node 0 (beamline -> hit 0)
-      double xCur = data.innerXX0 + uEloss(0);  // ... at node 1; read BEFORE slot 0 is overwritten
-      double du = 0., dup = 0.;
+      double_st xPrev = data.innerXX0;             // material column at node 0 (beamline -> hit 0)
+      double_st xCur = data.innerXX0 + uEloss(0);  // ... at node 1; read BEFORE slot 0 is overwritten
+      double_st du = 0., dup = 0.;
       uEloss(0) = 0.;  // the anchor
       for (u_int k = 0; k + 1 < n; ++k) {
-        const double ds = sTransverse(k + 1) - sTransverse(k);
-        const double dk = elossCurvPerXX0 * 0.5 * (xPrev + xCur);  // mid-gap curvature increment [1/cm]
+        const double_st ds = sTransverse(k + 1) - sTransverse(k);
+        const double_st dk = elossCurvPerXX0 * 0.5 * (xPrev + xCur);  // mid-gap curvature increment [1/cm]
         du += dup * ds - 0.5 * dk * ds * ds;
         dup -= dk * ds;
         xPrev = xCur;
@@ -1007,14 +1037,14 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
     static_assert(kLegacyBandBlockDoubles<n> == 6 * n + 1,
                   "band block [Mb 3n | cbor n | corner 1 | w n | ms n] shared by lineFit (Mb only) and circleFit; "
                   "the shared Mb requires lineFit to run (and read out) before circleFit rebuilds it");
-    double schur = 0.;  // held from the primary solve to the covariance extraction below
+    double_st schur = 0.;  // held from the primary solve to the covariance extraction below
     auto& uVec = fitWs.circleU;
     {
       const int ls = fitWs.laneStride;
-      double* const Mb = fitWs.bandMb;
-      double* const cbor = fitWs.bandCbor;
-      double* const wcol = fitWs.bandW;
-      double* const msc = fitWs.bandMs;
+      double_st* const Mb = fitWs.bandMb;
+      double_st* const cbor = fitWs.bandCbor;
+      double_st* const wcol = fitWs.bandW;
+      double_st* const msc = fitWs.bandMs;
       matrixC_uBandLower(weightsVec, sTransverse, varBeta, Mb, ls);
       fitWs.bandCorner[0] = circleBorderLower(sTransverse, varBeta, cbor, ls);
       generalBrokenLine::bandFactor<2>(Mb, n, ls);
@@ -1025,13 +1055,13 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
       for (u_int i = 0; i < n; i++)
         schur -= cbor[i * ls] * wcol[i * ls];  // schur = corner - cbor^T M^-1 cbor
       // uVec = A^-1 r_uVec: border x_n = (r_n - w^T rb)/schur, band x = M^-1 rb - w x_n.
-      double dot = 0.;
+      double_st dot = 0.;
       for (u_int i = 0; i < n; i++) {
         msc[i * ls] = r_uVec(i);
         dot += wcol[i * ls] * r_uVec(i);
       }
       generalBrokenLine::bandSolveInPlace<2>(Mb, msc, n, ls);  // msc = M^-1 rb
-      const double xN = (r_uVec(n) - dot) / schur;
+      const double_st xN = (r_uVec(n) - dot) / schur;
       for (u_int i = 0; i < n; i++)
         uVec(i) = msc[i * ls] - wcol[i * ls] * xN;
       uVec(n) = xN;
@@ -1047,7 +1077,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
       constexpr double kBaseMin2 = 2.0 * 2.0;  // cm^2: minimum transverse baseline (squared)
       mref = n - 1;
       for (u_int j = 1; j < n; ++j) {
-        double dx = hits(0, j) - hits(0, 0), dy = hits(1, j) - hits(1, 0);
+        double_st dx = hits(0, j) - hits(0, 0), dy = hits(1, j) - hits(1, 0);
         if (dx * dx + dy * dy > kBaseMin2) {
           mref = j;
           break;
@@ -1084,21 +1114,21 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
     // 1/schur; the two M^-1 columns come from unit-column band solves (e_0, e_mref).
     {
       const int ls = fitWs.laneStride;
-      double* const Mb = fitWs.bandMb;
-      double* const wcol = fitWs.bandW;
-      double* const msc = fitWs.bandMs;
-      const double invS = 1. / schur;
+      double_st* const Mb = fitWs.bandMb;
+      double_st* const wcol = fitWs.bandW;
+      double_st* const msc = fitWs.bandMs;
+      const double_st invS = 1. / schur;
       for (u_int i = 0; i < n; i++)
         msc[i * ls] = 0.;
       msc[0] = 1.;
       generalBrokenLine::bandSolveInPlace<2>(Mb, msc, n, ls);  // msc = M^-1 e_0
-      const double mi00 = msc[0], mim0 = msc[mref * ls];       // M^-1(0,0), M^-1(mref,0)
+      const double_st mi00 = msc[0], mim0 = msc[mref * ls];       // M^-1(0,0), M^-1(mref,0)
       for (u_int i = 0; i < n; i++)
         msc[i * ls] = 0.;
       msc[mref * ls] = 1.;
       generalBrokenLine::bandSolveInPlace<2>(Mb, msc, n, ls);  // msc = M^-1 e_mref
-      const double mi0m = msc[0], mimm = msc[mref * ls];       // M^-1(0,mref), M^-1(mref,mref)
-      const double w0 = wcol[0], wm = wcol[mref * ls];
+      const double_st mi0m = msc[0], mimm = msc[mref * ls];       // M^-1(0,mref), M^-1(mref,mref)
+      const double_st w0 = wcol[0], wm = wcol[mref * ls];
       circle_results.cov << mi00 + w0 * w0 * invS, mi0m + w0 * wm * invS, -w0 * invS, mim0 + wm * w0 * invS,
           mimm + wm * wm * invS, -wm * invS, -w0 * invS, -wm * invS, invS;
     }
@@ -1126,22 +1156,22 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
     // MS part; grafting it onto C_F substitutes the full-circle measurement cov for the 2-hit one. High pt:
     // C_blend -> C_F; low pt: C_blend ~ C_L. Gated on fitCorrections, since off the covariance must be upstream's.
     if (fitCorrections) {
-      const double cph = alpaka::math::cos(acc, circle_results.par(0));
-      const double sph = alpaka::math::sin(acc, circle_results.par(0));
+      const double_st cph = alpaka::math::cos(acc, circle_results.par(0));
+      const double_st sph = alpaka::math::sin(acc, circle_results.par(0));
       riemannFit::Matrix3d fisher = riemannFit::Matrix3d::Zero();
       for (u_int i = 0; i < n; i++) {
-        const double xx = hits_ge.col(i)[0], xy = hits_ge.col(i)[1], yy = hits_ge.col(i)[2];
-        const double sv2 = sph * sph * xx - 2. * sph * cph * xy + cph * cph * yy;  // track-perpendicular (rphi) var
+        const double_st xx = static_cast<double_st>(hits_ge.col(i)[0]), xy = static_cast<double_st>(hits_ge.col(i)[1]), yy = static_cast<double_st>(hits_ge.col(i)[2]);
+        const double_st sv2 = sph * sph * xx - 2. * sph * cph * xy + cph * cph * yy;  // track-perpendicular (rphi) var
         if (!(sv2 > 0.))
           continue;
-        const double u = hits(0, i) * cph + hits(1, i) * sph;  // along-track from origin
-        const double w = 1. / sv2;
+        const double_st u = hits(0, i) * cph + hits(1, i) * sph;  // along-track from origin
+        const double_st w = 1. / sv2;
         // Residual derivatives d v / d (phi, d0, rho) in the Karimaki convention {u, -1, -u^2/2}, the basis the
         // blend's other operand C_L is expressed in. (The {u, +1, +u^2/2} basis is its D = diag(1,-1,-1)
         // mirror: same diagonal, opposite sign of the (phi,d0) and (phi,rho) entries that cov(1) = covPhiDxy
         // carries to the consumers.)
         constexpr double gs = -1.;  // Karimaki-convention basis
-        const double g[3] = {u, gs, gs * 0.5 * u * u};
+        const double_st g[3] = {u, gs, gs * 0.5 * u * u};
         for (int a = 0; a < 3; ++a)
           for (int b = 0; b < 3; ++b)
             fisher(a, b) += w * g[a] * g[b];
@@ -1162,31 +1192,31 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
         offFit.par = par0;
         {
           const int ls = fitWs.laneStride;
-          double* const Mb = fitWs.bandMb;
-          double* const cbor = fitWs.bandCbor;
-          double* const wcol = fitWs.bandW;
-          double* const msc = fitWs.bandMs;
+          double_st* const Mb = fitWs.bandMb;
+          double_st* const cbor = fitWs.bandCbor;
+          double_st* const wcol = fitWs.bandW;
+          double_st* const msc = fitWs.bandMs;
           matrixC_uBandLower(weightsVec, sTransverse, varBetaOff, Mb, ls);
-          const double cornerOff = circleBorderLower(sTransverse, varBetaOff, cbor, ls);
+          const double_st cornerOff = circleBorderLower(sTransverse, varBetaOff, cbor, ls);
           generalBrokenLine::bandFactor<2>(Mb, n, ls);
           for (u_int i = 0; i < n; i++)
             wcol[i * ls] = cbor[i * ls];
           generalBrokenLine::bandSolveInPlace<2>(Mb, wcol, n, ls);
-          double schurOff = cornerOff;
+          double_st schurOff = cornerOff;
           for (u_int i = 0; i < n; i++)
             schurOff -= cbor[i * ls] * wcol[i * ls];
-          const double invS = 1. / schurOff;
+          const double_st invS = 1. / schurOff;
           for (u_int i = 0; i < n; i++)
             msc[i * ls] = 0.;
           msc[0] = 1.;
           generalBrokenLine::bandSolveInPlace<2>(Mb, msc, n, ls);  // msc = M^-1 e_0
-          const double mi00 = msc[0], mim0 = msc[mref * ls];
+          const double_st mi00 = msc[0], mim0 = msc[mref * ls];
           for (u_int i = 0; i < n; i++)
             msc[i * ls] = 0.;
           msc[mref * ls] = 1.;
           generalBrokenLine::bandSolveInPlace<2>(Mb, msc, n, ls);  // msc = M^-1 e_mref
-          const double mi0m = msc[0], mimm = msc[mref * ls];
-          const double w0 = wcol[0], wm = wcol[mref * ls];
+          const double_st mi0m = msc[0], mimm = msc[mref * ls];
+          const double_st w0 = wcol[0], wm = wcol[mref * ls];
           offFit.cov << mi00 + w0 * w0 * invS, mi0m + w0 * wm * invS, -w0 * invS, mim0 + wm * w0 * invS,
               mimm + wm * wm * invS, -wm * invS, -w0 * invS, -wm * invS, invS;
         }
@@ -1196,12 +1226,12 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
         translateKarimaki(acc, offFit, dVec(0), dVec(1), jtmp);
         // Blend: write the full 3x3 from the one model, the (phi,d0) 2x2 and the kappa row/column (already
         // computed). C_L = circle_results.cov; all differences are read before any write.
-        const double msPhiPhi = circle_results.cov(0, 0) - offFit.cov(0, 0);
-        const double msPhiD0 = circle_results.cov(0, 1) - offFit.cov(0, 1);
-        const double msD0D0 = circle_results.cov(1, 1) - offFit.cov(1, 1);
-        const double msPhiK = circle_results.cov(0, 2) - offFit.cov(0, 2);
-        const double msD0K = circle_results.cov(1, 2) - offFit.cov(1, 2);
-        const double msKK = circle_results.cov(2, 2) - offFit.cov(2, 2);
+        const double_st msPhiPhi = circle_results.cov(0, 0) - offFit.cov(0, 0);
+        const double_st msPhiD0 = circle_results.cov(0, 1) - offFit.cov(0, 1);
+        const double_st msD0D0 = circle_results.cov(1, 1) - offFit.cov(1, 1);
+        const double_st msPhiK = circle_results.cov(0, 2) - offFit.cov(0, 2);
+        const double_st msD0K = circle_results.cov(1, 2) - offFit.cov(1, 2);
+        const double_st msKK = circle_results.cov(2, 2) - offFit.cov(2, 2);
         circle_results.cov(0, 0) = fcov(0, 0) + msPhiPhi;
         circle_results.cov(0, 1) = fcov(0, 1) + msPhiD0;
         circle_results.cov(1, 0) = fcov(1, 0) + msPhiD0;
@@ -1234,7 +1264,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
 
   /*!
     \brief Performs the Broken Line fit in the straight track case (that is, the fit parameters are only the interceptions u).
-    
+
     \param hits hits coordinates.
     \param fast_fit pre-fit result in the form (X0,Y0,R,tan(theta)).
     \param bField magnetic field in Gev/cm/c.
@@ -1243,18 +1273,18 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
     -par parameter of the line in this form: (cot(theta), Zip); \n
     -cov covariance matrix of the fitted parameter; \n
     -chi2 value of the cost function in the minimum.
-    
+
     \param fitCorrections selects the fast-BL scattering/covariance package (see the file head); here it
            selects the momentum factor of the innermost-material multScatt call.
 
     \details The function implements the steps 2 and 3 of the Broken Line fit without
    *        the curvature correction.\n
-   * The step 2 is the least square fit, done by imposing the minimum constraint 
-   * on the cost function and solving the consequent linear system. It determines 
+   * The step 2 is the least square fit, done by imposing the minimum constraint
+   * on the cost function and solving the consequent linear system. It determines
    * the fitted parameters u and their covariance matrix.
-   * The step 3 is the correction of the fast pre-fitted parameters for the innermost 
-   * part of the track. It is first done in a comfortable coordinate system (the one 
-   * in which the first hit is the origin) and then the parameters and their covariance 
+   * The step 3 is the correction of the fast pre-fitted parameters for the innermost
+   * part of the track. It is first done in a comfortable coordinate system (the one
+   * in which the first hit is the origin) and then the parameters and their covariance
    * matrix are transformed to the original coordinate system.
    */
   template <alpaka::concepts::Acc TAcc, typename V4, typename M6xN, typename TData, typename TWs, int n = TData::kN>
@@ -1271,7 +1301,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
     const auto& zInSZplane = data.zInSZplane;
     const auto& varBeta = data.varBeta;
 
-    const double slope = -data.qCharge / fast_fit(3);
+    const double_st slope = -data.qCharge / fast_fit(3);
 #ifdef BL_DEEPDEBUG
     printf("Slope: %e, charge: %d, curvature: %e\n", slope, data.qCharge, fast_fit(3));
 #endif
@@ -1285,12 +1315,12 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
     auto& weights = fitWs.lineWeights;
     weights = riemannFit::VectorNd<n>::Zero();
     for (u_int i = 0; i < n; i++) {
-      vMat(0, 0) = hits_ge.col(i)[0];               // x errors
-      vMat(0, 1) = vMat(1, 0) = hits_ge.col(i)[1];  // cov_xy
-      vMat(0, 2) = vMat(2, 0) = hits_ge.col(i)[3];  // cov_xz
-      vMat(1, 1) = hits_ge.col(i)[2];               // y errors
-      vMat(2, 1) = vMat(1, 2) = hits_ge.col(i)[4];  // cov_yz
-      vMat(2, 2) = hits_ge.col(i)[5];               // z errors
+      vMat(0, 0) = static_cast<double_st>(hits_ge.col(i)[0]);               // x errors
+      vMat(0, 1) = static_cast<double_st>(vMat(1, 0) = hits_ge.col(i)[1]);  // cov_xy
+      vMat(0, 2) = static_cast<double_st>(vMat(2, 0) = hits_ge.col(i)[3]);  // cov_xz
+      vMat(1, 1) = static_cast<double_st>(hits_ge.col(i)[2]);               // y errors
+      vMat(2, 1) = static_cast<double_st>(vMat(1, 2) = hits_ge.col(i)[4]);  // cov_yz
+      vMat(2, 2) = static_cast<double_st>(hits_ge.col(i)[5]);               // z errors
       auto tmp = 1. / radii.block(0, i, 2, 1).norm();
       jacobXYZtosZ(0, 0) = data.qCharge * radii(1, i) * tmp;
       jacobXYZtosZ(0, 1) = -data.qCharge * radii(0, i) * tmp;
@@ -1312,7 +1342,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
     auto& uVec = fitWs.lineU;
     {
       const int ls = fitWs.laneStride;
-      double* const Mb = fitWs.bandMb;
+      double_st* const Mb = fitWs.bandMb;
       matrixC_uBandLower(weights, sTotal, varBeta, Mb, ls);
       generalBrokenLine::bandFactor<2>(Mb, n, ls);
       for (u_int i = 0; i < n; i++)  // load the rhs, then solve in place: uVec = M^-1 r_u
@@ -1328,18 +1358,18 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
     // M^-1(0,1), M^-1(1,1), from two unit-column band solves (e_0, e_1).
     {
       const int ls = fitWs.laneStride;
-      double* const Mb = fitWs.bandMb;
-      double* const col = fitWs.bandMs;
+      double_st* const Mb = fitWs.bandMb;
+      double_st* const col = fitWs.bandMs;
       for (u_int i = 0; i < n; i++)
         col[i * ls] = 0.;
       col[0] = 1.;
       generalBrokenLine::bandSolveInPlace<2>(Mb, col, n, ls);  // col = M^-1 e_0
-      const double i00 = col[0];
+      const double_st i00 = col[0];
       for (u_int i = 0; i < n; i++)
         col[i * ls] = 0.;
       col[1 * ls] = 1.;
       generalBrokenLine::bandSolveInPlace<2>(Mb, col, n, ls);  // col = M^-1 e_1
-      const double i01 = col[0], i11 = col[1 * ls];
+      const double_st i01 = col[0], i11 = col[1 * ls];
       line_results.cov << (i00 - 2 * i01 + i11) * riemannFit::sqr(idiff) +
                               multScatt(acc, data.innerXX0, bField, fast_fit(2), slope, fitCorrections),
           (i01 - i00) * idiff, (i01 - i00) * idiff, i00;
@@ -1383,7 +1413,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
     -circle fit of the hits projected in the transverse plane by Broken Line algorithm (see BL_Circle_fit() for further info); \n
     -line fit of the hits projected on the (pre-fitted) cilinder surface by Broken Line algorithm (see BL_Line_fit() for further info); \n
     Points must be passed ordered (from inner to outer layer).
-    
+
     \param hits Matrix3xNd hits coordinates in this form: \n
     |x1|x2|x3|...|xn| \n
     |y1|y2|y3|...|yn| \n
@@ -1404,11 +1434,11 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
     |(x1,z3)|(x2,z3)|(x3,z3)|(x4,z3)|.|(y1,z3)|(y2,z3)|(y3,z3)|(y4,z3)|.|(z1,z3)|(z2,z3)|(z3,z3)|(z4,z3)| \n
     |(x1,z4)|(x2,z4)|(x3,z4)|(x4,z4)|.|(y1,z4)|(y2,z4)|(y3,z4)|(y4,z4)|.|(z1,z4)|(z2,z4)|(z3,z4)|(z4,z4)|
     \param bField magnetic field in the center of the detector in Gev/cm/c, in order to perform the p_t calculation.
-    
+
     \warning see BL_Circle_fit(), BL_Line_fit() and Fast_fit() warnings.
-    
+
     \bug see BL_Circle_fit(), BL_Line_fit() and Fast_fit() bugs.
-    
+
     \return (phi,Tip,p_t,cot(theta)),Zip), their covariance matrix and the chi2's of the circle and line fits.
   */
 
