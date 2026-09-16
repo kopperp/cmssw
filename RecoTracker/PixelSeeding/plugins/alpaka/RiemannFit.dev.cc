@@ -11,8 +11,10 @@
 #include "DataFormats/TrackingRecHitSoA/interface/TrackingRecHitsSoA.h"
 #include "HeterogeneousCore/AlpakaInterface/interface/config.h"
 #include "HeterogeneousCore/AlpakaInterface/interface/memory.h"
+#include "Utilities/Cadna/interface/CadnaEigenTypes.h"
 #include "RecoTracker/PixelSeeding/interface/CAGeometrySoA.h"
 #include "RecoTracker/PixelTrackFitting/interface/alpaka/RiemannFit.h"
+#include "Utilities/Cadna/interface/CadnaEigenTypes.h"
 
 #include "HelixFit.h"
 #include "CAStructures.h"
@@ -34,9 +36,9 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                   uint32_t nHits,
                                   ::reco::TrackingRecHitConstView hh,
                                   ::reco::CAModulesConstView cm,
-                                  double *__restrict__ phits,
-                                  float *__restrict__ phits_ge,
-                                  double *__restrict__ pfast_fit,
+                                  double_st* __restrict__ phits,
+                                  float_st* __restrict__ phits_ge,
+                                  double_st* __restrict__ pfast_fit,
                                   uint32_t offset) const {
       constexpr uint32_t hitsInFit = N;
 
@@ -101,9 +103,9 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                   TupleMultiplicity const *__restrict__ tupleMultiplicity,
                                   uint32_t nHits,
                                   double bField,
-                                  double *__restrict__ phits,
-                                  float *__restrict__ phits_ge,
-                                  double *__restrict__ pfast_fit_input,
+                                  double_st* __restrict__ phits,
+                                  float_st* __restrict__ phits_ge,
+                                  double_st* __restrict__ pfast_fit_input,
                                   riemannFit::CircleFit *circle_fit,
                                   uint32_t offset) const {
       ALPAKA_ASSERT_ACC(circle_fit);
@@ -147,9 +149,9 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                   uint32_t nHits,
                                   double bField,
                                   OutputSoAView results_view,
-                                  double *__restrict__ phits,
-                                  float *__restrict__ phits_ge,
-                                  double *__restrict__ pfast_fit_input,
+                                  double_st* __restrict__ phits,
+                                  float_st* __restrict__ phits_ge,
+                                  double_st* __restrict__ pfast_fit_input,
                                   riemannFit::CircleFit *__restrict__ circle_fit,
                                   uint32_t offset) const {
       ALPAKA_ASSERT_ACC(circle_fit);
@@ -182,7 +184,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                              line_fit.cov,
                              1.f / float(bField),
                              tkid);
-        results_view[tkid].pt() = bField / std::abs(circle_fit[local_idx].par(2));
+        results_view[tkid].pt() = bField / abs(circle_fit[local_idx].par(2));
         results_view[tkid].eta() = asinhf(line_fit.par(0));
         results_view[tkid].chi2() = (circle_fit[local_idx].chi2 + line_fit.chi2) / (2 * N - 5);
 
@@ -242,12 +244,12 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
     static_assert(maxN == 6,
                   "the explicit 3/4/5-hit ladder below leaves bins 6..maxN-1 unfitted for a cap != 6: "
                   "generalize the ladder before changing maxHitsOnTrackForRiemannFit");
-    auto hitsDevice = cms::alpakatools::make_device_buffer<double[]>(
-        queue, maxNumberOfConcurrentFits_ * sizeof(riemannFit::Matrix3xNd<maxN>) / sizeof(double));
-    auto hits_geDevice = cms::alpakatools::make_device_buffer<float[]>(
-        queue, maxNumberOfConcurrentFits_ * sizeof(riemannFit::Matrix6xNf<maxN>) / sizeof(float));
-    auto fast_fit_resultsDevice = cms::alpakatools::make_device_buffer<double[]>(
-        queue, maxNumberOfConcurrentFits_ * sizeof(riemannFit::Vector4d) / sizeof(double));
+    auto hitsDevice = cms::alpakatools::make_device_buffer<double_st[]>(
+        queue, maxNumberOfConcurrentFits_ * sizeof(riemannFit::Matrix3xNd<maxN>) / sizeof(double_st));
+    auto hits_geDevice = cms::alpakatools::make_device_buffer<float_st[]>(
+        queue, maxNumberOfConcurrentFits_ * sizeof(riemannFit::Matrix6xNf<maxN>) / sizeof(float_st));
+    auto fast_fit_resultsDevice = cms::alpakatools::make_device_buffer<double_st[]>(
+        queue, maxNumberOfConcurrentFits_ * sizeof(riemannFit::Vector4d) / sizeof(double_st));
     auto circle_fit_resultsDevice_holder =
         cms::alpakatools::make_device_buffer<char[]>(queue, maxNumberOfConcurrentFits_ * sizeof(riemannFit::CircleFit));
     riemannFit::CircleFit *circle_fit_resultsDevice_ =

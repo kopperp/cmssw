@@ -10,6 +10,8 @@
 
 #include <cmath>
 
+#include "Utilities/Cadna/interface/CadnaEigenTypes.h"
+
 #include "RecoTracker/PixelTrackFitting/interface/BLMaterialMap.h"
 
 namespace gblTestMaterial {
@@ -66,18 +68,18 @@ namespace gblTestMaterial {
   // The same partition with trapezoid weights, the one the kernel calls for the gaps and for the
   // beamline->hit0 segment alike. Returns the same W as segmentXX0(..., trapezoid=true).
   // cf. ALPAKA_ACCELERATOR_NAMESPACE::brokenline::segmentXX0GapSplit.
-  inline double segmentXX0GapSplit(double r0, double z0, double r1, double z1, double& d1, double& w1) {
+  inline double segmentXX0GapSplit(double_st r0, double_st z0, double_st r1, double_st z1, double& d1, double& w1) {
     const float* rho = blMaterialMap::blMaterialMapData();
-    const double L = std::sqrt((r1 - r0) * (r1 - r0) + (z1 - z0) * (z1 - z0));
+    const double_st L = sqrt((r1 - r0) * (r1 - r0) + (z1 - z0) * (z1 - z0));
     int nseg = int(2. * L);
     if (nseg < 2)
       nseg = 2;
-    const double dl = L / (nseg - 1);
-    double W = 0., S1overL = 0., S2overL2 = 0.;
+    const double_st dl = L / (nseg - 1);
+    double_st W = 0., S1overL = 0., S2overL2 = 0.;
     for (int k = 0; k < nseg; ++k) {
-      const double f = double(k) / (nseg - 1);
-      const double w = (k == 0 || k == nseg - 1) ? 0.5 * dl : dl;
-      const double q = blMaterialMap::rhoAt(rho, float(r0 + f * (r1 - r0)), float(z0 + f * (z1 - z0))) * w;
+      const double_st f = static_cast<double_st>(k) / (nseg - 1);
+      const double_st w = (k == 0 || k == nseg - 1) ? 0.5 * dl : dl;
+      const double_st q = blMaterialMap::rhoAt(rho, float(r0 + f * (r1 - r0)), float(z0 + f * (z1 - z0))) * w;
       W += q;
       S1overL += q * (1. - f);
       S2overL2 += q * (1. - f) * (1. - f);
@@ -109,7 +111,7 @@ namespace gblTestMaterial {
   template <int N, typename M3xN>
   inline void fillMatData(const M3xN& hits, MatData<N>& md) {
     auto rOf = [&](int j) {
-      return std::sqrt(double(hits(0, j)) * double(hits(0, j)) + double(hits(1, j)) * double(hits(1, j)));
+      return sqrt(static_cast<double_st>(hits(0, j)) * static_cast<double_st>(hits(0, j)) + static_cast<double_st>(hits(1, j)) * static_cast<double_st>(hits(1, j)));
     };
     for (int i = 0; i < N; ++i) {
       md.matXX0[i] = 0.;

@@ -11,6 +11,7 @@
 #include "Geometry/CommonTopologies/interface/SimplePixelTopology.h"
 #include "HeterogeneousCore/AlpakaInterface/interface/config.h"
 #include "RecoTracker/PixelSeeding/interface/CAGeometrySoA.h"
+#include "Utilities/Cadna/interface/CadnaEigenTypes.h"
 
 #include "CAStructures.h"
 
@@ -20,9 +21,9 @@ namespace riemannFit {
   // it re-lays every per-lane buffer.
   constexpr uint32_t maxNumberOfConcurrentFits = 8 * 1024;
   constexpr uint32_t stride = maxNumberOfConcurrentFits;
-  using Matrix3x4d = Eigen::Matrix<double, 3, 4>;
+  using Matrix3x4d = Eigen::Matrix<double_st, 3, 4>;
   using Map3x4d = Eigen::Map<Matrix3x4d, 0, Eigen::Stride<3 * stride, stride> >;
-  using Matrix6x4f = Eigen::Matrix<float, 6, 4>;
+  using Matrix6x4f = Eigen::Matrix<float_st, 6, 4>;
   using Map6x4f = Eigen::Map<Matrix6x4f, 0, Eigen::Stride<6 * stride, stride> >;
 
   // Stride-parameterized fit-buffer maps. The lane stride S is the launch's concurrent-fit count:
@@ -31,14 +32,14 @@ namespace riemannFit {
   // global stride, used by the main fit and every other caller.
   // hits
   template <int N>
-  using Matrix3xNd = Eigen::Matrix<double, 3, N>;
+  using Matrix3xNd = Eigen::Matrix<double_st, 3, N>;
   template <int N, uint32_t S = stride>
   using Map3xNdS = Eigen::Map<Matrix3xNd<N>, 0, Eigen::Stride<3 * S, S> >;
   template <int N>
   using Map3xNd = Map3xNdS<N, stride>;
   // errors
   template <int N>
-  using Matrix6xNf = Eigen::Matrix<float, 6, N>;
+  using Matrix6xNf = Eigen::Matrix<float_st, 6, N>;
   template <int N, uint32_t S = stride>
   using Map6xNfS = Eigen::Map<Matrix6xNf<N>, 0, Eigen::Stride<6 * S, S> >;
   template <int N>

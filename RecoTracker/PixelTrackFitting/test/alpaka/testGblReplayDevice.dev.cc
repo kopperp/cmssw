@@ -23,6 +23,7 @@
 #include "HeterogeneousCore/AlpakaInterface/interface/config.h"
 #include "HeterogeneousCore/AlpakaInterface/interface/memory.h"
 #include "HeterogeneousCore/AlpakaInterface/interface/workdivision.h"
+#include "Utilities/Cadna/interface/CadnaEigenTypes.h"
 
 #include "RecoTracker/PixelTrackFitting/interface/BLMaterialMap.h"
 #include "RecoTracker/PixelTrackFitting/interface/BrokenLine.h"         // upstream host fastFit
@@ -42,23 +43,23 @@ namespace {
   template <int N>
   struct MatKernel {
     ALPAKA_FN_ACC void operator()(Acc1D const& acc,
-                                  double const* hitsIn,
-                                  double const* ffIn,
+                                  double_st const* hitsIn,
+                                  double_st const* ffIn,
                                   float const* rho,
                                   double bField,
-                                  double* out) const {
+                                  double_st* out) const {
       for ([[maybe_unused]] auto lane : cms::alpakatools::uniform_elements(acc, 1)) {
-        Eigen::Matrix<double, 3, N> hits;
+        Eigen::Matrix<double_st, 3, N> hits;
         for (int c = 0; c < N; ++c)
           for (int r = 0; r < 3; ++r)
             hits(r, c) = hitsIn[3 * c + r];
         const Eigen::Vector4d ff(ffIn[0], ffIn[1], ffIn[2], ffIn[3]);
 
         bld::PreparedGblData<N> data;
-        double gapD1[N], gapW1[N];
+        double_st gapD1[N], gapW1[N];
         bld::prepareGblFitData(acc, hits, ff, bField, rho, data, /*matCached=*/nullptr, gapD1, gapW1);
-        const double rHit0 = alpaka::math::sqrt(acc, hits(0, 0) * hits(0, 0) + hits(1, 0) * hits(1, 0));
-        double innerD1 = 0., innerW1 = 0.;
+        const double_st rHit0 = alpaka::math::sqrt(acc, hits(0, 0) * hits(0, 0) + hits(1, 0) * hits(1, 0));
+        double_st innerD1 = 0., innerW1 = 0.;
         if (data.innerXX0 > 0.)
           bld::segmentXX0GapSplit(acc, rho, 0., 0., rHit0, hits(2, 0), innerD1, innerW1);
 
@@ -75,12 +76,12 @@ namespace {
   };
 
   struct MaxRel {
-    double v = 0.;
+    double_st v = 0.;
     bool any = false;
-    void add(double got, double ref) {
-      if (std::abs(ref) > 1e-30) {
+    void add(double_st got, double_st ref) {
+      if (abs(ref) > 1e-30) {
         any = true;
-        v = std::max(v, std::abs(got - ref) / std::abs(ref));
+        v = std::max(v, abs(got - ref) / abs(ref));
       }
     }
   };
@@ -88,7 +89,7 @@ namespace {
   template <int N>
   void runFixture(Queue& queue, const char* devName, const char* label, const double D[N][9], const float* rhoDev) {
     constexpr int kOut = 3 * N + 3;
-    Eigen::Matrix<double, 3, N> hits;
+    Eigen::Matrix<double_st, 3, N> hits;
     for (int k = 0; k < N; ++k) {
       hits(0, k) = D[k][0];
       hits(1, k) = D[k][1];
@@ -97,18 +98,18 @@ namespace {
     Eigen::Vector4d ff;
     blh::fastFit(hits, ff);
 
-    auto hits_h = cms::alpakatools::make_host_buffer<double[], Platform>(3 * N);
-    auto ff_h = cms::alpakatools::make_host_buffer<double[], Platform>(4);
+    auto hits_h = cms::alpakatools::make_host_buffer<double_st[], Platform>(3 * N);
+    auto ff_h = cms::alpakatools::make_host_buffer<double_st[], Platform>(4);
     for (int c = 0; c < N; ++c)
       for (int r = 0; r < 3; ++r)
         hits_h[3 * c + r] = hits(r, c);
     for (int j = 0; j < 4; ++j)
       ff_h[j] = ff(j);
 
-    auto hits_d = cms::alpakatools::make_device_buffer<double[]>(queue, 3 * N);
-    auto ff_d = cms::alpakatools::make_device_buffer<double[]>(queue, 4);
-    auto out_d = cms::alpakatools::make_device_buffer<double[]>(queue, kOut);
-    auto out_h = cms::alpakatools::make_host_buffer<double[], Platform>(kOut);
+    auto hits_d = cms::alpakatools::make_device_buffer<double_st[]>(queue, 3 * N);
+    auto ff_d = cms::alpakatools::make_device_buffer<double_st[]>(queue, 4);
+    auto out_d = cms::alpakatools::make_device_buffer<double_st[]>(queue, kOut);
+    auto out_h = cms::alpakatools::make_host_buffer<double_st[], Platform>(kOut);
     alpaka::memcpy(queue, hits_d, hits_h);
     alpaka::memcpy(queue, ff_d, ff_h);
     alpaka::memset(queue, out_d, 0);
@@ -139,10 +140,10 @@ namespace {
     std::printf("  %-28s N=%2d | matXX0=%.2e gapD1=%.2e gapW1=%.2e inner=%.2e   (host innerXX0=%.6g)  [%s]\n",
                 label,
                 N,
-                mat.v,
-                gd1.v,
-                gw1.v,
-                inner.v,
+                static_cast<double>(mat.v),
+                static_cast<double>(gd1.v),
+                static_cast<double>(gw1.v),
+                static_cast<double>(inner.v),
                 md.innerXX0,
                 devName);
 

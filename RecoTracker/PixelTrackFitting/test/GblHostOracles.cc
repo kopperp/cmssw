@@ -17,6 +17,7 @@
 #include "TrackingTools/TrajectoryParametrization/interface/GlobalTrajectoryParameters.h"
 #include "TrackingTools/TrajectoryState/interface/FreeTrajectoryState.h"
 #include "TrackingTools/TrajectoryState/interface/PerigeeConversions.h"
+#include "Utilities/Cadna/interface/CadnaEigenTypes.h"
 
 #include "RecoTracker/PixelTrackFitting/test/GblHostOracles.h"
 
@@ -35,8 +36,8 @@ namespace {
         m(a, b) = p[a * 5 + b];
     return m;
   }
-  Eigen::Matrix2d mat2(const double* p) {
-    Eigen::Matrix2d m;
+  Eigen::Matrix<double_st, 2, 2> mat2(const double* p) {
+    Eigen::Matrix<double_st, 2, 2> m;
     m << p[0], p[1], p[2], p[3];
     return m;
   }
@@ -58,13 +59,13 @@ namespace gblHostOracles {
       points.emplace_back(k == 0 ? Eigen::Matrix<double, 5, 5>::Identity() : mat5(nodes[k].jacToPrev));
       gbl::GblPoint& p = points.back();
       if (nodes[k].hasMeas) {
-        const Eigen::Vector2d res(nodes[k].measResidual[0], nodes[k].measResidual[1]);
-        const Eigen::Matrix2d prec = mat2(nodes[k].measPrec);
+        const Eigen::Vector<double_st, 2> res(nodes[k].measResidual[0], nodes[k].measResidual[1]);
+        const Eigen::Matrix<double_st, 2, 2> prec = mat2(nodes[k].measPrec);
         p.addMeasurement(res, prec);
       }
       if (nodes[k].hasScat) {
-        const Eigen::Vector2d kink = Eigen::Vector2d::Zero();
-        const Eigen::Matrix2d sp = mat2(nodes[k].scatPrec);
+        const Eigen::Vector<double, 2> kink = Eigen::Vector<double, 2>::Zero();
+        const Eigen::Matrix<double, 2, 2> sp = mat2(nodes[k].scatPrec);
         p.addScatterer(kink, sp);
       }
     }
@@ -90,38 +91,38 @@ namespace gblHostOracles {
     return r;
   }
 
-  PerigeeRatios perigeeRatios(const double fastFit[4],
+  PerigeeRatios perigeeRatios(const double_st fastFit[4],
                               int qCharge,
                               double bField,
-                              double sTransverse0,
-                              double hitZ0,
-                              const double corr[5],
-                              const double cov[25],
-                              const double helixPar[5],
-                              const double helixCov[25]) {
+                              double_st sTransverse0,
+                              double_st hitZ0,
+                              const double_st corr[5],
+                              const double_st cov[25],
+                              const double_st helixPar[5],
+                              const double_st helixCov[25]) {
     PerigeeRatios out;
     // Rebuild the fitted state at the PCA exactly as gblHelixAtPca does, then hand it to CMSSW.
-    const double cx = fastFit[0], cy = fastFit[1], R = fastFit[2];
-    const double slope = -double(qCharge) / fastFit[3];
-    const double sec2 = 1. + slope * slope, invn = 1. / std::sqrt(sec2);
-    const double pTot = bField * R * std::sqrt(sec2);
-    const double cmag = std::sqrt(cx * cx + cy * cy);
-    const double pcaX = cx * (1. - R / cmag), pcaY = cy * (1. - R / cmag);
-    const double z0r = hitZ0 - slope * sTransverse0;
-    const double rx = (pcaX - cx) / R, ry = (pcaY - cy) / R;
-    const Eigen::Vector3d Tv(double(qCharge) * ry * invn, -double(qCharge) * rx * invn, slope * invn);
-    const Eigen::Vector3d U = Eigen::Vector3d(0., 0., 1.).cross(Tv).normalized();
-    const Eigen::Vector3d Vv = Tv.cross(U);
-    const double phiRef = std::atan2(Tv.y(), Tv.x());
-    const double lamRef = std::atan2(Tv.z(), std::hypot(Tv.x(), Tv.y()));
-    const double phiFit = phiRef + corr[2], lamFit = lamRef + corr[1];
-    const double qbpFit = double(qCharge) / pTot + corr[0];
-    if (!(std::abs(qbpFit) > 0.))
+    const double_st cx = fastFit[0], cy = fastFit[1], R = fastFit[2];
+    const double_st slope = -static_cast<double_st>(qCharge) / fastFit[3];
+    const double_st sec2 = 1. + slope * slope, invn = 1. / sqrt(sec2);
+    const double_st pTot = bField * R * sqrt(sec2);
+    const double_st cmag = sqrt(cx * cx + cy * cy);
+    const double_st pcaX = cx * (1. - R / cmag), pcaY = cy * (1. - R / cmag);
+    const double_st z0r = hitZ0 - slope * sTransverse0;
+    const double_st rx = (pcaX - cx) / R, ry = (pcaY - cy) / R;
+    const Eigen::Vector<double_st, 3> Tv(static_cast<double_st>(qCharge) * ry * invn, -static_cast<double_st>(qCharge) * rx * invn, slope * invn);
+    const Eigen::Vector<double_st, 3> U = Eigen::Vector<double_st, 3>(0., 0., 1.).cross(Tv).normalized();
+    const Eigen::Vector<double_st, 3> Vv = Tv.cross(U);
+    const double_st phiRef = atan2(Tv.y(), Tv.x());
+    const double_st lamRef = atan2(Tv.z(), hypot(Tv.x(), Tv.y()));
+    const double_st phiFit = phiRef + corr[2], lamFit = lamRef + corr[1];
+    const double_st qbpFit = static_cast<double_st>(qCharge) / pTot + corr[0];
+    if (!(abs(qbpFit) > 0.))
       return out;
-    const double pFit = 1. / std::abs(qbpFit);
-    const double clam = std::cos(lamFit), slam = std::sin(lamFit);
-    const Eigen::Vector3d mom(pFit * clam * std::cos(phiFit), pFit * clam * std::sin(phiFit), pFit * slam);
-    const Eigen::Vector3d pos(pcaX + corr[3] * U.x() + corr[4] * Vv.x(),
+    const double_st pFit = 1. / abs(qbpFit);
+    const double_st clam = cos(lamFit), slam = sin(lamFit);
+    const Eigen::Vector<double_st, 3> mom(pFit * clam * cos(phiFit), pFit * clam * sin(phiFit), pFit * slam);
+    const Eigen::Vector<double_st, 3> pos(pcaX + corr[3] * U.x() + corr[4] * Vv.x(),
                               pcaY + corr[3] * U.y() + corr[4] * Vv.y(),
                               z0r + corr[3] * U.z() + corr[4] * Vv.z());
 
@@ -135,17 +136,17 @@ namespace gblHostOracles {
     const FreeTrajectoryState fts(gtp, CurvilinearTrajectoryError(curvSym));
     double ptOut = 0.;
     const auto pp = PerigeeConversions::ftsToPerigeeParameters(fts, GlobalPoint(0., 0., 0.), ptOut);
-    const double rho = pp->vector()(0);  // signed transverse curvature ~ 1/pt
+    const double_st rho = pp->vector()(0);  // signed transverse curvature ~ 1/pt
     const AlgebraicSymMatrix55 rc = PerigeeConversions::ftsToPerigeeError(fts).covarianceMatrix();
     // CMSSW perigee order (0..4) = (curvature, theta, phi, d0, z0);
     // ours (helixPar/helixCov, 0..4)  = (phi, d0, k = 1/R, cotTheta, z0).
-    const double cmD0 = std::sqrt(rc(3, 3)), cmZ0 = std::sqrt(rc(4, 4)), cmPhi = std::sqrt(rc(2, 2));
-    const double cmTh = std::sqrt(rc(1, 1)), cmPtRel = std::sqrt(rc(0, 0)) / std::abs(rho);
-    const double cott = helixPar[3];
-    const double ourD0 = std::sqrt(helixCov[1 * 5 + 1]), ourZ0 = std::sqrt(helixCov[4 * 5 + 4]);
-    const double ourPhi = std::sqrt(helixCov[0]);
-    const double ourTh = std::sqrt(helixCov[3 * 5 + 3]) / (1. + cott * cott);  // sigma(cotTheta) -> sigma(theta)
-    const double ourPtRel = std::sqrt(helixCov[2 * 5 + 2]) / std::abs(helixPar[2]);
+    const double_st cmD0 = std::sqrt(rc(3, 3)), cmZ0 = std::sqrt(rc(4, 4)), cmPhi = std::sqrt(rc(2, 2));
+    const double_st cmTh = std::sqrt(rc(1, 1)), cmPtRel = std::sqrt(rc(0, 0)) / abs(rho);
+    const double_st cott = helixPar[3];
+    const double_st ourD0 = sqrt(helixCov[1 * 5 + 1]), ourZ0 = sqrt(helixCov[4 * 5 + 4]);
+    const double_st ourPhi = sqrt(helixCov[0]);
+    const double_st ourTh = sqrt(helixCov[3 * 5 + 3]) / (1. + cott * cott);  // sigma(cotTheta) -> sigma(theta)
+    const double_st ourPtRel = sqrt(helixCov[2 * 5 + 2]) / abs(helixPar[2]);
     if (!(cmD0 > 0. && cmZ0 > 0. && cmPhi > 0. && cmTh > 0. && cmPtRel > 0.))
       return out;
     out.d0 = ourD0 / cmD0;

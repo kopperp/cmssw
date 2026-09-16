@@ -7,6 +7,7 @@
 // %.dev.cc to nvcc. This header pulls std types only.
 
 #include <vector>
+#include "Utilities/Cadna/interface/CadnaEigenTypes.h"
 
 namespace gblHostOracles {
 
@@ -39,7 +40,7 @@ namespace gblHostOracles {
 
   //!< sigma ratios ours/CMSSW for the five perigee parameters (1.0 == identical).
   struct PerigeeRatios {
-    double d0 = 0., z0 = 0., phi = 0., theta = 0., ptRel = 0.;
+    double_st d0 = 0., z0 = 0., phi = 0., theta = 0., ptRel = 0.;
     bool ok = false;
   };
 
@@ -49,15 +50,15 @@ namespace gblHostOracles {
   // tracks the two coincide and every ratio is ~1.
   // \param fastFit (cx, cy, R, cotTheta-encoded 4th slot) -- the GBL reference helix.
   // \param corr / cov the GBL result at node 0; \param helixPar / helixCov what gblHelixAtPca produced.
-  PerigeeRatios perigeeRatios(const double fastFit[4],
+  PerigeeRatios perigeeRatios(const double_st fastFit[4],
                               int qCharge,
                               double bField,
-                              double sTransverse0,
-                              double hitZ0,
-                              const double corr[5],
-                              const double cov[25],
-                              const double helixPar[5],
-                              const double helixCov[25]);
+                              double_st sTransverse0,
+                              double_st hitZ0,
+                              const double_st corr[5],
+                              const double_st cov[25],
+                              const double_st helixPar[5],
+                              const double_st helixCov[25]);
 
 }  // namespace gblHostOracles
 
