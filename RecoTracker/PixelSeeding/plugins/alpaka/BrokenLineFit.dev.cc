@@ -7,6 +7,7 @@
 #include "BrokenLineFitKernels.h"
 #include "FWCore/Utilities/interface/isFinite.h"  // bit-pattern finiteness test for the failed-refit guard
 #include "HeterogeneousCore/AlpakaInterface/interface/prefixScan.h"  // parallel hit compaction (Counts->scan->Scatter)
+#include "Utilities/Cadna/interface/CadnaEigenTypes.h"
 #include "DataFormats/TrackSoA/interface/alpaka/TracksSoACollection.h"  // dedup union-refit scratch output SoA
 
 namespace ALPAKA_ACCELERATOR_NAMESPACE {
@@ -26,26 +27,26 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
       const uint32_t cap = (nToPrint_ < total) ? nToPrint_ : total;
       printf("[BL-fit tag=%u] post-fit dump: nTracks=%u, showing first %u\n", tagId_, total, cap);
       for (uint32_t i = 0; i < cap; ++i) {
-        const float phi0 = tracks[i].state()(0);
-        const float d0 = tracks[i].state()(1);
+        const float_st phi0 = static_cast<float_st>(tracks[i].state()(0));
+        const float_st d0 = static_cast<float_st>(tracks[i].state()(1));
         // state(2) is 1/pT in 1/GeV (CMSSW BL convention; see TracksSoA.h).
         // pT[GeV] = 1 / |state(2)|.  Sign of state(2) carries the charge.
-        const float invPt = tracks[i].state()(2);
-        const float cotTheta = tracks[i].state()(3);
-        const float z0 = tracks[i].state()(4);
-        const float absInvPt = std::abs(invPt);
-        const float pT = (absInvPt > 1.e-9f) ? (1.f / absInvPt) : 1.e9f;
-        const float charge = (invPt >= 0.f) ? +1.f : -1.f;
-        const float eta = std::asinh(cotTheta);
-        const float chi2 = tracks[i].chi2();
+        const float_st invPt = static_cast<float_st>(tracks[i].state()(2));
+        const float_st cotTheta = static_cast<float_st>(tracks[i].state()(3));
+        const float_st z0 = static_cast<float_st>(tracks[i].state()(4));
+        const float_st absInvPt = static_cast<float_st>(abs(invPt));
+        const float_st pT = static_cast<float_st>((absInvPt > 1.e-9f) ? static_cast<float_st>(1.f / absInvPt) : static_cast<float_st>(1.e9f));
+        const float_st charge = static_cast<float_st>((invPt >= 0.f) ? +1.f : -1.f);
+        const float_st eta = static_cast<float_st>(asinh(cotTheta));
+        const float_st chi2 = static_cast<float_st>(tracks[i].chi2());
         const int q = int(tracks[i].quality());
         // Reported track uncertainties: covariance() is the packed Vector15f; idx 0 = sigma^2(phi),
         // idx 5 = sigma^2(d0)=sigma^2(dxy) (see DataFormats/TrackSoA/interface/TracksSoA.h).
-        const float sdxy = 1.e4f * std::sqrt(std::abs(float(tracks[i].covariance()(5))));  // um
-        const float sphi = std::sqrt(std::abs(float(tracks[i].covariance()(0))));          // rad
+        const float_st sdxy = 1.e4f * sqrt(abs(static_cast<float_st>(tracks[i].covariance()(5))));  // um
+        const float_st sphi = sqrt(abs(static_cast<float_st>(tracks[i].covariance()(0))));          // rad
         // longitudinal: cov(14)=var(Zip=z0)=var(dz), cov(12)=var(cotTheta) (see TracksSoA copyFromCircle).
-        const float sdz = 1.e4f * std::sqrt(std::abs(float(tracks[i].covariance()(14))));  // um, sigma(dz)
-        const float scot = std::sqrt(std::abs(float(tracks[i].covariance()(12))));         // sigma(cotTheta)
+        const float_st sdz = 1.e4f * sqrt(abs(static_cast<float_st>(tracks[i].covariance()(14))));  // um, sigma(dz)
+        const float_st scot = sqrt(abs(static_cast<float_st>(tracks[i].covariance()(12))));         // sigma(cotTheta)
         printf(
             "[BL-fit tag=%u] i=%u q=%d chi2=%.3f phi0=%.4f d0=%.5f invPt=%.6f cotTheta=%.4f z0=%.4f "
             "-> pT=%.3f GeV q=%+0.0f eta=%.4f  sigma(dxy)=%.2f um sigma(phi)=%.5f rad  sigma(dz)=%.2f um "
@@ -53,19 +54,19 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
             tagId_,
             i,
             q,
-            chi2,
-            phi0,
-            d0,
-            invPt,
-            cotTheta,
-            z0,
-            pT,
-            charge,
-            eta,
-            sdxy,
-            sphi,
-            sdz,
-            scot);
+            static_cast<float>(chi2),
+            static_cast<float>(phi0),
+            static_cast<float>(d0),
+            static_cast<float>(invPt),
+            static_cast<float>(cotTheta),
+            static_cast<float>(z0),
+            static_cast<float>(pT),
+            static_cast<float>(charge),
+            static_cast<float>(eta),
+            static_cast<float>(sdxy),
+            static_cast<float>(sphi),
+            static_cast<float>(sdz),
+            static_cast<float>(scot));
       }
     }
 
@@ -99,18 +100,18 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
     auto tkidDevice =
         cms::alpakatools::make_device_buffer<typename caStructures::tindex_type[]>(queue, maxNumberOfConcurrentFits_);
     constexpr auto maxN = TrackerTraits::maxHitsOnTrackForFullFit;
-    auto hitsDevice = cms::alpakatools::make_device_buffer<double[]>(
-        queue, maxNumberOfConcurrentFits_ * sizeof(riemannFit::Matrix3xNd<maxN>) / sizeof(double));
-    auto hits_geDevice = cms::alpakatools::make_device_buffer<float[]>(
-        queue, maxNumberOfConcurrentFits_ * sizeof(riemannFit::Matrix6xNf<maxN>) / sizeof(float));
-    auto fast_fit_resultsDevice = cms::alpakatools::make_device_buffer<double[]>(
-        queue, maxNumberOfConcurrentFits_ * sizeof(riemannFit::Vector4d) / sizeof(double));
+    auto hitsDevice = cms::alpakatools::make_device_buffer<double_st[]>(
+        queue, maxNumberOfConcurrentFits_ * sizeof(riemannFit::Matrix3xNd<maxN>) / sizeof(double_st));
+    auto hits_geDevice = cms::alpakatools::make_device_buffer<float_st[]>(
+        queue, maxNumberOfConcurrentFits_ * sizeof(riemannFit::Matrix6xNf<maxN>) / sizeof(float_st));
+    auto fast_fit_resultsDevice = cms::alpakatools::make_device_buffer<double_st[]>(
+        queue, maxNumberOfConcurrentFits_ * sizeof(riemannFit::Vector4d) / sizeof(double_st));
     // Per-fit solver scratch of the factorized fit: prepared-data + shared band block + helper vectors
     // per lane, in an [element][lane] layout whose stride is the concurrent-fit count, so it is allocated
     // at maxNumberOfConcurrentFits_ lanes (like the input buffers). The refit-ladder allocation
     // (refitExtended) is GBL-only and keeps its own quota.
     constexpr int kScratchPerFit = brokenline::kLegacyFitScratchDoubles<int(maxN)>;
-    auto gblScratchDevice = cms::alpakatools::make_device_buffer<double[]>(
+    auto gblScratchDevice = cms::alpakatools::make_device_buffer<double_st[]>(
         queue, std::size_t(maxNumberOfConcurrentFits_) * std::size_t(kScratchPerFit));
     // Dynamic-partition bookkeeping of the fused ladder (see the block comment at the head of
     // BrokenLineFitKernels.h). One uint32 allocation holding, in order: the per-bin round cursor
@@ -232,12 +233,12 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
       // Own buffer set: the Eigen Map stride is kRefitStride (the refit kernels are instantiated at that
       // stride), sized to maxN. Caching-allocator backed -> transient, recycled across events/streams.
       auto tkidDevice = cms::alpakatools::make_device_buffer<typename caStructures::tindex_type[]>(queue, nt);
-      auto hitsDevice = cms::alpakatools::make_device_buffer<double[]>(
-          queue, nt * sizeof(riemannFit::Matrix3xNd<maxN>) / sizeof(double));
-      auto hits_geDevice = cms::alpakatools::make_device_buffer<float[]>(
-          queue, nt * sizeof(riemannFit::Matrix6xNf<maxN>) / sizeof(float));
+      auto hitsDevice = cms::alpakatools::make_device_buffer<double_st[]>(
+          queue, nt * sizeof(riemannFit::Matrix3xNd<maxN>) / sizeof(double_st));
+      auto hits_geDevice = cms::alpakatools::make_device_buffer<float_st[]>(
+          queue, nt * sizeof(riemannFit::Matrix6xNf<maxN>) / sizeof(float_st));
       auto fast_fit_resultsDevice =
-          cms::alpakatools::make_device_buffer<double[]>(queue, nt * sizeof(riemannFit::Vector4d) / sizeof(double));
+          cms::alpakatools::make_device_buffer<double_st[]>(queue, nt * sizeof(riemannFit::Vector4d) / sizeof(double_st));
       // GBL node workspace, per-lane stride = the widest node chain a lane can build: the exact two-thin
       // split's 2N+1 at the largest refit N (the arrival-node layout's N+2 fits inside it), so one
       // allocation serves both node layouts.
@@ -247,7 +248,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
       // The gFullDelta term is absent: it overlays the head of the band region.
       constexpr int kScratchPerFit = generalBrokenLine::kGblScratchDoubles<kNodesPerFit - 1> + 3 * kNodesPerFit;
       auto gblScratchDevice =
-          cms::alpakatools::make_device_buffer<double[]>(queue, std::size_t(nt) * std::size_t(kScratchPerFit));
+          cms::alpakatools::make_device_buffer<double_st[]>(queue, std::size_t(nt) * std::size_t(kScratchPerFit));
       // Dynamic-partition bookkeeping. One allocation of 2 * kRefitNBins uint32: [0, kRefitNBins) are
       // the per-bin demands Kernel_BLRefitBinCount fills, [kRefitNBins, 2*kRefitNBins) the per-bin
       // claim counters the scans atomically advance -- one array, so one memset covers both.

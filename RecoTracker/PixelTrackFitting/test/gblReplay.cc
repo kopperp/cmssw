@@ -56,11 +56,15 @@
 
 #include <Eigen/Core>
 #include <Eigen/Dense>
+#include "Utilities/Cadna/interface/CadnaEigenTypes.h"
 
 #include "RecoTracker/PixelTrackFitting/interface/BrokenLine.h"
 #include "RecoTracker/PixelTrackFitting/interface/GeneralBrokenLine.h"
 // Host copy of the device material march (the upstream host BrokenLine.h carries none); see its header.
 #include "RecoTracker/PixelTrackFitting/test/gblTestMaterial.h"
+
+using Vector5d = Eigen::Vector<double_st, 5>;
+using Matrix5d = Eigen::Matrix<double_st, 5, 5>;
 
 namespace {
 
@@ -97,7 +101,7 @@ namespace {
   inline int geomClassOf(double gem, double z) {
     if (gem < kGemPixMax)
       return kGCNone;  // pixel
-    const bool disk = std::abs(z) >= kE12EndcapZ;
+    const bool disk = abs(z) >= kE12EndcapZ;
     if (gem < kGemPSMax)
       return disk ? kGCPSdisk : kGCPSbarrel;
     return disk ? kGC2Sdisk : kGC2Sbarrel;
@@ -133,32 +137,32 @@ namespace {
     int sflags = 0;  // packed reco::StubFlags byte (merged path only)
     int sens = 0;    // 0 = pixel/unknown, 1 = lower/inner sensor, 2 = upper/outer sensor
     int pair = 0;    // 1 = lo[]/up[] hold the stub pair's two sensor positions
-    double lo[3] = {0, 0, 0};
-    double up[3] = {0, 0, 0};
-    double dphidr = 0., dphidrerr = 0., ptest = 0.;
+    double_st lo[3] = {0, 0, 0};
+    double_st up[3] = {0, 0, 0};
+    double_st dphidr = 0., dphidrerr = 0., ptest = 0.;
   };
 
   struct DumpRec {
     unsigned tk = 0;
     int n = 0;
-    double bField = 0.;
-    double ff[4] = {0, 0, 0, 0};
+    double_st bField = 0.;
+    double_st ff[4] = {0, 0, 0, 0};
     int q = 0;
-    double innerXX0 = 0.;
-    std::vector<std::array<double, 3>> xyz;
-    std::vector<std::array<double, 6>> ge;
-    std::vector<double> matXX0;  // per segment i->i+1 (last entry 0)
+    double_st innerXX0 = 0.;
+    std::vector<std::array<double_st, 3>> xyz;
+    std::vector<std::array<double_st, 6>> ge;
+    std::vector<double_st> matXX0;  // per segment i->i+1 (last entry 0)
     std::vector<HitInfo> info;
     bool hasFit = false;
-    double hp[5] = {0, 0, 0, 0, 0};
-    double chi2 = 0.;
+    double_st hp[5] = {0, 0, 0, 0, 0};
+    double_st chi2 = 0.;
     // ---- appended (optional) fields of the phase-split merger dump ----
-    double bEff = 0.;  // 0 = absent -> the replay falls back to the scalar bField
+    double_st bEff = 0.;  // 0 = absent -> the replay falls back to the scalar bField
     int tag = -1;      // refit call site (-1 = absent)
     int ndof = 0;      // device ndof of the emitted state
     int drop = -1;     // fit-hit index removed by the in-fit outlier stage (-1 = none)
     // Field the DEVICE fit used: B_eff when the dump carries it, else the origin scalar.
-    double fitB() const { return bEff > 0. ? bEff : bField; }
+    double_st fitB() const { return bEff > 0. ? bEff : bField; }
   };
 
   // Reads the trailing "<key> <value>..." pairs an extended BLDUMP line appends after its fixed part.
@@ -223,15 +227,15 @@ namespace {
 
   // Dense normal-equation assembly over a hits-only node set (mirrors the gblFitPca dense path).
   void assembleAb(const std::vector<generalBrokenLine::GblNodeData>& sub,
-                  Eigen::MatrixXd& A,
-                  Eigen::VectorXd& b,
-                  double& chi2ref) {
+                  Eigen::Matrix<double_st, Eigen::Dynamic, Eigen::Dynamic>& A,
+                  Eigen::Vector<double_st, Eigen::Dynamic>& b,
+                  double_st& chi2ref) {
     using namespace generalBrokenLine;
     const int nN = static_cast<int>(sub.size());
     const int nP = 1 + 2 * nN;
     auto uIdx = [](int k) { return 1 + 2 * k; };
-    A = Eigen::MatrixXd::Zero(nP, nP);
-    b = Eigen::VectorXd::Zero(nP);
+    A = Eigen::Matrix<double_st, Eigen::Dynamic, Eigen::Dynamic>::Zero(nP, nP);
+    b = Eigen::Vector<double_st, Eigen::Dynamic>::Zero(nP);
     chi2ref = 0.;
     for (int i = 0; i < nN; ++i)
       if (sub[i].hasMeas) {
@@ -247,12 +251,12 @@ namespace {
         nextDerivatives(sub[i + 1].jacToPrev, nextW, nextWJ, nextWd);
         const Matrix2d sumWJ = prevWJ + nextWJ;
         const Vector2d sumWd = prevWd + nextWd;
-        Eigen::Matrix<double, 2, 7> D;
+        Eigen::Matrix<double_st, 2, 7> D;
         D.block<2, 1>(0, 0) = -sumWd;
         D.block<2, 2>(0, 1) = prevW;
         D.block<2, 2>(0, 3) = -sumWJ;
         D.block<2, 2>(0, 5) = nextW;
-        const Eigen::Matrix<double, 7, 7> K = D.transpose() * sub[i].scatPrec * D;
+        const Eigen::Matrix<double_st, 7, 7> K = D.transpose() * sub[i].scatPrec * D;
         const int idx[7] = {0, uIdx(i - 1), uIdx(i - 1) + 1, uIdx(i), uIdx(i) + 1, uIdx(i + 1), uIdx(i + 1) + 1};
         for (int a = 0; a < 7; ++a)
           for (int c = 0; c < 7; ++c)
@@ -274,18 +278,18 @@ namespace {
   template <int N>
   void processTrack(const DumpRec& rec) {
     using namespace generalBrokenLine;
-    Eigen::Matrix<double, 3, N> hits;
-    Eigen::Matrix<float, 6, N> hits_ge;
+    Eigen::Matrix<double_st, 3, N> hits;
+    Eigen::Matrix<float_st, 6, N> hits_ge;
     for (int i = 0; i < N; ++i) {
       for (int k = 0; k < 3; ++k)
         hits(k, i) = rec.xyz[i][k];
       for (int k = 0; k < 6; ++k)
-        hits_ge(k, i) = float(rec.ge[i][k]);
+        hits_ge(k, i) = static_cast<float_st>(rec.ge[i][k]);
     }
-    Eigen::Vector4d ff(rec.ff[0], rec.ff[1], rec.ff[2], rec.ff[3]);
+    Eigen::Vector<double_st, 4> ff(rec.ff[0], rec.ff[1], rec.ff[2], rec.ff[3]);
     // The field the device fit used: the merger refit uses a per-track |z|-effective field, so a merger
     // dump replayed with the origin scalar would differ from the device. Dumps without it use the scalar.
-    const double bFit = rec.fitB();
+    const double_st bFit = rec.fitB();
 
     // arc lengths / charge from the host twin (pure geometry, identical math to the device)
     brokenline::PreparedBrokenLineData<N> data;
@@ -297,23 +301,23 @@ namespace {
       printf("REPLAY_WARN tk %u qCharge host %d != device %d\n", rec.tk, data.qCharge, rec.q);
     // material-map audit: host baked-in map vs the device ES product (dumped values)
     for (int i = 0; i + 1 < N; ++i)
-      if (std::abs(md.matXX0[i] - rec.matXX0[i]) > 1e-9 + 1e-6 * rec.matXX0[i])
-        printf("REPLAY_MATDIFF tk %u seg %d host %.9g device %.9g\n", rec.tk, i, md.matXX0[i], rec.matXX0[i]);
-    if (std::abs(md.innerXX0 - rec.innerXX0) > 1e-9 + 1e-6 * rec.innerXX0)
-      printf("REPLAY_MATDIFF tk %u inner host %.9g device %.9g\n", rec.tk, md.innerXX0, rec.innerXX0);
+      if (abs(md.matXX0[i] - rec.matXX0[i]) > 1e-9 + 1e-6 * rec.matXX0[i])
+        printf("REPLAY_MATDIFF tk %u seg %d host %.9g device %.9g\n", rec.tk, i, static_cast<double>(md.matXX0[i]), static_cast<double>(rec.matXX0[i]));
+    if (abs(md.innerXX0 - rec.innerXX0) > 1e-9 + 1e-6 * rec.innerXX0)
+      printf("REPLAY_MATDIFF tk %u inner host %.9g device %.9g\n", rec.tk, static_cast<double>(md.innerXX0), static_cast<double>(rec.innerXX0));
     // replay with the DEVICE material (bit-faithful to the dumped fit)
     riemannFit::VectorNd<N> matD;
     for (int i = 0; i < N; ++i)
-      matD(i) = (i + 1 < N) ? rec.matXX0[i] : 0.;
+      matD(i) = (i + 1 < N) ? rec.matXX0[i] : static_cast<double_st>(0.);
 
-    double bUse = bFit, bConv = bFit;
+    double_st bUse = bFit, bConv = bFit;
 
     // Two-thin-scatterer split of the upstream (beamline->hit0) material from the host map, with
     // segmentXX0GapSplit (trapezoid rule) as the kernel takes it, not the rectangle-weighted
     // segmentXX0Moments, which would shift innerD1/innerW1.
     double innerD1 = 0., innerW1 = 0.;
     if (rec.innerXX0 > 0.) {
-      const double rHit0 = std::hypot(hits(0, 0), hits(1, 0));
+      const double_st rHit0 = hypot(hits(0, 0), hits(1, 0));
       gblTestMaterial::segmentXX0GapSplit(0., 0., rHit0, hits(2, 0), innerD1, innerW1);
     }
     std::vector<GblNodeData> nodes(N + 2);
@@ -344,14 +348,14 @@ namespace {
 
     // node set actually fitted: full system [PCA, scatterer, hits...] (inner-node layout, extraction at PCA)
     // or the fallback hits-only set with the upstream scattering re-added as angle process noise afterwards.
-    double th2Inner = 0.;
+    double_st th2Inner = 0.;
     std::vector<GblNodeData> sub;
     int hit0 = 0;  // index of hit 0 within `sub`
     if (usedInner) {
       sub.assign(nodes.begin(), nodes.begin() + N + 2);
       hit0 = 2;
     } else {
-      th2Inner = nodes[1].hasScat ? 1.0 / nodes[1].scatPrec(0, 0) : 0.0;
+      th2Inner = nodes[1].hasScat ? 1.0 / nodes[1].scatPrec(0, 0) : static_cast<double_st>(0.);
       nodes[1].hasScat = false;
       sub.assign(nodes.begin() + 1, nodes.begin() + N + 1);
     }
@@ -362,25 +366,25 @@ namespace {
     if (rec.drop >= 0 && rec.drop < N)
       sub[hit0 + rec.drop].hasMeas = false;
 
-    Eigen::MatrixXd A;
-    Eigen::VectorXd b;
-    double chi2ref = 0.;
+    Eigen::Matrix<double_st, Eigen::Dynamic, Eigen::Dynamic> A;
+    Eigen::Vector<double_st, Eigen::Dynamic> b;
+    double_st chi2ref = 0.;
     assembleAb(sub, A, b, chi2ref);
     const int nP = 1 + 2 * int(sub.size());
     auto uIdx = [](int k) { return 1 + 2 * k; };
-    Eigen::LLT<Eigen::MatrixXd> llt(A);
+    Eigen::LLT<Eigen::Matrix<double_st, Eigen::Dynamic, Eigen::Dynamic>> llt(A);
     if (llt.info() != Eigen::Success) {
       printf("REPLAY_WARN tk %u LLT failed\n", rec.tk);
       return;
     }
-    const Eigen::MatrixXd cov = llt.solve(Eigen::MatrixXd::Identity(nP, nP));
-    const Eigen::VectorXd delta = cov * b;
-    const double chi2 = chi2ref - delta.dot(b);
+    const Eigen::Matrix<double_st, Eigen::Dynamic, Eigen::Dynamic> cov = llt.solve(Eigen::Matrix<double_st, Eigen::Dynamic, Eigen::Dynamic>::Identity(nP, nP));
+    const Eigen::Vector<double_st, Eigen::Dynamic> delta = cov * b;
+    const double_st chi2 = chi2ref - delta.dot(b);
 
     // track-level fidelity: full pipeline vs the dump (inner-node layout extracts at the PCA directly; the
     // fallback layout adds the upstream angle noise at hit0 and propagates with jacBack)
     Vector5d gcorr;
-    double gchi2 = 0.;
+    double_st gchi2 = 0.;
     Matrix5d gcov = gblFitPca(sub, &gcorr, nullptr, &gchi2);
     Vector5d corrPca;
     Matrix5d covPca;
@@ -388,7 +392,7 @@ namespace {
       corrPca = gcorr;
       covPca = gcov;
     } else {
-      const double slopeQ = -double(rec.q) / ff(3);
+      const double_st slopeQ = -static_cast<double_st>(rec.q) / ff(3);
       gcov(1, 1) += th2Inner;
       gcov(2, 2) += th2Inner * (1.0 + slopeQ * slopeQ);
       corrPca = jacBack * gcorr;
@@ -398,28 +402,28 @@ namespace {
     Matrix5d hc;
     // trailing `chargeSymmetric`: the production value (useChargeSymmetricCorrections is ON).
     gblHelixAtPca(
-        ff, rec.q, bConv, double(data.sTransverse(0)), hits(2, 0), corrPca, covPca, hp, hc, nullptr, kChargeSymmetric);
-    const double pt = bConv / std::abs(hp(2));
-    const double eta = std::asinh(hp(3));
+        ff, rec.q, bConv, static_cast<double_st>(data.sTransverse(0)), hits(2, 0), corrPca, covPca, hp, hc, nullptr, kChargeSymmetric);
+    const double_st pt = bConv / abs(hp(2));
+    const double_st eta = asinh(hp(3));
     hp(2) /= bConv;  // SoA convention of the dumped hp
-    double dHp = 0.;
+    double_st dHp = 0.;
     if (rec.hasFit)
       for (int a = 0; a < 5; ++a)
-        dHp = std::max(dHp, std::abs(hp(a) - rec.hp[a]));
+        dHp = fmax(dHp, abs(hp(a) - rec.hp[a]));
     printf(
         "REPLAY_TRK tk %u N %d mode %d pt %.5g eta %.4g q %d chi2 %.6g chi2dev %.6g dHp %.3g tag %d beff %.9g drop "
         "%d ndof %d\n",
         rec.tk,
         N,
         0,
-        pt,
-        eta,
+        static_cast<double>(pt),
+        static_cast<double>(eta),
         rec.q,
-        chi2,
-        rec.hasFit ? rec.chi2 : std::nan(""),
-        rec.hasFit ? dHp : std::nan(""),
+        static_cast<double>(chi2),
+        static_cast<double>(rec.hasFit ? rec.chi2 : static_cast<double_st>(std::nan(""))),
+        static_cast<double>(rec.hasFit ? dHp : static_cast<double_st>(std::nan(""))),
         rec.tag,
-        bFit,
+        static_cast<double>(bFit),
         rec.drop,
         rec.ndof);
 
@@ -429,51 +433,58 @@ namespace {
       const bool dropped = (rec.drop == i);
       if (!sub[si].hasMeas && !dropped)
         continue;
-      const double r = std::hypot(hits(0, i), hits(1, i));
-      const double z = hits(2, i);
+      const double_st r = hypot(hits(0, i), hits(1, i));
+      const double_st z = hits(2, i);
       // module-type discriminator: the largest eigenvalue of the global hit covariance (pixel ~1e-5 cm^2,
       // PS macro-pixel ~2e-3, 2S strip ~2 -- two orders of magnitude apart each)
-      Eigen::Matrix3d ge3;
-      ge3 << hits_ge(0, i), hits_ge(1, i), hits_ge(3, i), hits_ge(1, i), hits_ge(2, i), hits_ge(4, i), hits_ge(3, i),
-          hits_ge(4, i), hits_ge(5, i);
-      const double gem = Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d>(ge3).eigenvalues()(2);
-      const Eigen::Vector2d u = delta.segment<2>(uIdx(si));
-      const Eigen::Matrix2d Cii = cov.block<2, 2>(uIdx(si), uIdx(si));
-      const Eigen::Matrix2d V = sub[si].measPrec.inverse();  // effective (U,V) measurement covariance
-      Eigen::SelfAdjointEigenSolver<Eigen::Matrix2d> es(V);
-      const double cond = es.eigenvalues()(1) / std::max(es.eigenvalues()(0), 1e-300);
-      const Eigen::Vector2d rb = sub[si].measResidual - u;
-      // A dropped node never entered the normal equations, so its offset covariance is already the
+      Eigen::Matrix<double_st, 3, 3> ge3;
+      ge3 << static_cast<double_st>(hits_ge(0, i)),
+             static_cast<double_st>(hits_ge(1, i)),
+             static_cast<double_st>(hits_ge(3, i)),
+             static_cast<double_st>(hits_ge(1, i)),
+             static_cast<double_st>(hits_ge(2, i)),
+             static_cast<double_st>(hits_ge(4, i)),
+             static_cast<double_st>(hits_ge(3, i)),
+             static_cast<double_st>(hits_ge(4, i)),
+             static_cast<double_st>(hits_ge(5, i));
+      const double_st gem = Eigen::SelfAdjointEigenSolver<Eigen::Matrix<double_st, 3, 3>>(ge3).eigenvalues()(2);
+      const Eigen::Vector<double_st, 2> u = delta.segment<2>(uIdx(si));
+      const Eigen::Matrix<double_st, 2, 2> Cii = cov.block<2, 2>(uIdx(si), uIdx(si));
+      const Eigen::Matrix<double_st, 2, 2> V = sub[si].measPrec.inverse();  // effective (U,V) measurement covariance
+      Eigen::SelfAdjointEigenSolver<Eigen::Matrix<double_st, 2, 2>> es(V);
+      const double_st cond = es.eigenvalues()(1) / fmax(es.eigenvalues()(0), 1e-300);
+      const Eigen::Vector<double_st, 2> rb = sub[si].measResidual - u;
+      // A DROPPED node never entered the normal equations, so its offset covariance is already the
       // leave-one-out one: the residual sigma adds (V + C) instead of subtracting (V - C).
-      const Eigen::Matrix2d Sb = dropped ? Eigen::Matrix2d(V + Cii) : Eigen::Matrix2d(V - Cii);
-      double pbU = std::nan(""), pbV = std::nan("");
+      const Eigen::Matrix<double_st, 2, 2> Sb = dropped ? Eigen::Matrix<double_st, 2, 2>(V + Cii) : Eigen::Matrix<double_st, 2, 2>(V - Cii);
+      double_st pbU = std::nan(""), pbV = std::nan("");
       if (Sb(0, 0) > 0.)
-        pbU = rb(0) / std::sqrt(Sb(0, 0));
+        pbU = rb(0) / sqrt(Sb(0, 0));
       if (Sb(1, 1) > 0.)
-        pbV = rb(1) / std::sqrt(Sb(1, 1));
+        pbV = rb(1) / sqrt(Sb(1, 1));
       // unbiased (leave-one-out): remove this node's measurement, re-solve
-      double puU = std::nan(""), puV = std::nan("");
+      double_st puU = std::nan(""), puV = std::nan("");
       if (dropped) {  // already leave-one-out: the device fit excluded this measurement
         puU = pbU;
         puV = pbV;
       } else {
-        Eigen::MatrixXd Ap = A;
+        Eigen::Matrix<double_st, Eigen::Dynamic, Eigen::Dynamic> Ap = A;
         Ap.block<2, 2>(uIdx(si), uIdx(si)) -= sub[si].measPrec;
-        Eigen::VectorXd bp = b;
+        Eigen::Vector<double_st, Eigen::Dynamic> bp = b;
         bp.segment<2>(uIdx(si)) -= sub[si].measPrec * sub[si].measResidual;
-        Eigen::LDLT<Eigen::MatrixXd> ldlt(Ap);
+        Eigen::LDLT<Eigen::Matrix<double_st, Eigen::Dynamic, Eigen::Dynamic>> ldlt(Ap);
         if (ldlt.info() == Eigen::Success) {
-          const Eigen::MatrixXd covp = ldlt.solve(Eigen::MatrixXd::Identity(nP, nP));
-          if ((Ap * covp - Eigen::MatrixXd::Identity(nP, nP)).norm() < 1e-6 * nP) {  // reject singular leave-one-out
-            const Eigen::VectorXd dp = covp * bp;
-            const Eigen::Vector2d up = dp.segment<2>(uIdx(si));
-            const Eigen::Matrix2d Cp = covp.block<2, 2>(uIdx(si), uIdx(si));
-            const Eigen::Vector2d ru = sub[si].measResidual - up;
-            const Eigen::Matrix2d Su = V + Cp;
+          const Eigen::Matrix<double_st, Eigen::Dynamic, Eigen::Dynamic> covp = ldlt.solve(Eigen::Matrix<double_st, Eigen::Dynamic, Eigen::Dynamic>::Identity(nP, nP));
+          if ((Ap * covp - Eigen::Matrix<double_st, Eigen::Dynamic, Eigen::Dynamic>::Identity(nP, nP)).norm() < 1e-6 * nP) {  // reject singular leave-one-out
+            const Eigen::Vector<double_st, Eigen::Dynamic> dp = covp * bp;
+            const Eigen::Vector<double_st, 2> up = dp.segment<2>(uIdx(si));
+            const Eigen::Matrix<double_st, 2, 2> Cp = covp.block<2, 2>(uIdx(si), uIdx(si));
+            const Eigen::Vector<double_st, 2> ru = sub[si].measResidual - up;
+            const Eigen::Matrix<double_st, 2, 2> Su = V + Cp;
             if (Su(0, 0) > 0.)
-              puU = ru(0) / std::sqrt(Su(0, 0));
+              puU = ru(0) / sqrt(Su(0, 0));
             if (Su(1, 1) > 0.)
-              puV = ru(1) / std::sqrt(Su(1, 1));
+              puV = ru(1) / sqrt(Su(1, 1));
           }
         }
       }
@@ -486,18 +497,18 @@ namespace {
           "%.6g %.6g %.6g dphidr %.6g dphidrerr %.6g hid %u dropped %d\n",
           rec.tk,
           i,
-          r,
-          z,
-          gem,
-          rb(0),
-          rb(1),
-          Sb(0, 0) > 0. ? std::sqrt(Sb(0, 0)) : std::nan(""),
-          Sb(1, 1) > 0. ? std::sqrt(Sb(1, 1)) : std::nan(""),
-          pbU,
-          pbV,
-          puU,
-          puV,
-          cond,
+          static_cast<double>(r),
+          static_cast<double>(z),
+          static_cast<double>(gem),
+          static_cast<double>(rb(0)),
+          static_cast<double>(rb(1)),
+          static_cast<double>(Sb(0, 0) > 0. ? sqrt(Sb(0, 0)) : static_cast<double_st>(std::nan(""))),
+          static_cast<double>(Sb(1, 1) > 0. ? sqrt(Sb(1, 1)) : static_cast<double_st>(std::nan(""))),
+          static_cast<double>(pbU),
+          static_cast<double>(pbV),
+          static_cast<double>(puU),
+          static_cast<double>(puV),
+          static_cast<double>(cond),
           rec.tag,
           hi.valid ? hi.det : -1,
           hi.valid ? hi.isStub : -1,
@@ -505,14 +516,14 @@ namespace {
           hi.valid ? hi.isOT : -1,
           hi.valid ? hi.sens : -1,
           hi.valid ? hi.pair : -1,
-          hi.lo[0],
-          hi.lo[1],
-          hi.lo[2],
-          hi.up[0],
-          hi.up[1],
-          hi.up[2],
-          hi.dphidr,
-          hi.dphidrerr,
+          static_cast<double>(hi.lo[0]),
+          static_cast<double>(hi.lo[1]),
+          static_cast<double>(hi.lo[2]),
+          static_cast<double>(hi.up[0]),
+          static_cast<double>(hi.up[1]),
+          static_cast<double>(hi.up[2]),
+          static_cast<double>(hi.dphidr),
+          static_cast<double>(hi.dphidrerr),
           hi.hid,
           dropped ? 1 : 0);
     }
@@ -520,10 +531,10 @@ namespace {
 
   // Arm machinery.
   struct ArmFit {
-    double pt = std::nan("");
-    double eta = std::nan("");
-    double chi2 = std::nan("");
-    double sigrel = std::nan("");  // sigma(pT)/pT from the fitted covariance = sqrt(hc(2,2))/|kappa|
+    double_st pt = std::nan("");
+    double_st eta = std::nan("");
+    double_st chi2 = std::nan("");
+    double_st sigrel = std::nan("");  // sigma(pT)/pT from the fitted covariance = sqrt(hc(2,2))/|kappa|
     bool ok = false;
   };
 
@@ -536,13 +547,13 @@ namespace {
   // Everything else (reference, material, charge, field, the dumped outlier drop) is production.
   template <int N>
   ArmFit solveOnce(const DumpRec& rec,
-                   const Eigen::Matrix<double, 3, N>& hits,
-                   const Eigen::Matrix<float, 6, N>& hits_ge,
-                   const Eigen::Vector4d& ff,
+                   const Eigen::Matrix<double_st, 3, N>& hits,
+                   const Eigen::Matrix<float_st, 6, N>& hits_ge,
+                   const Eigen::Vector<double_st, 4>& ff,
                    const brokenline::PreparedBrokenLineData<N>& data,
                    const riemannFit::VectorNd<N>& matD,
-                   double bFit,
-                   double innerXX0Use,
+                   double_st bFit,
+                   double_st innerXX0Use,
                    bool applyE3,
                    bool ignoreDrop = false,
                    int twoSMode = kTwoSNone,
@@ -553,7 +564,7 @@ namespace {
     ArmFit out;
     double innerD1 = 0., innerW1 = 0.;
     if (innerXX0Use > 0.) {
-      const double rHit0 = std::hypot(hits(0, 0), hits(1, 0));
+      const double_st rHit0 = hypot(hits(0, 0), hits(1, 0));
       gblTestMaterial::segmentXX0GapSplit(0., 0., rHit0, hits(2, 0), innerD1, innerW1);
     }
     std::vector<GblNodeData> nodes(N + 2);
@@ -582,14 +593,14 @@ namespace {
                       kScatteringLogAtTotal,
                       kElossCumulative);
 
-    double th2Inner = 0.;
+    double_st th2Inner = 0.;
     std::vector<GblNodeData> sub;
     int hit0 = 0;
     if (usedInner) {
       sub.assign(nodes.begin(), nodes.begin() + N + 2);
       hit0 = 2;
     } else {
-      th2Inner = nodes[1].hasScat ? 1.0 / nodes[1].scatPrec(0, 0) : 0.0;
+      th2Inner = nodes[1].hasScat ? 1.0 / nodes[1].scatPrec(0, 0) : static_cast<double_st>(0.);
       nodes[1].hasScat = false;
       sub.assign(nodes.begin() + 1, nodes.begin() + N + 1);
     }
@@ -608,20 +619,27 @@ namespace {
         const HitInfo& hi = (i < int(rec.info.size())) ? rec.info[i] : kNoInfo;
         if (hi.valid && hi.isStub != 1)
           continue;  // pixel node
-        if (std::abs(hits(2, i)) <= kE3EndcapZ)
+        if (abs(hits(2, i)) <= kE3EndcapZ)
           continue;  // barrel
-        Eigen::Matrix3d ge3;
-        ge3 << hits_ge(0, i), hits_ge(1, i), hits_ge(3, i), hits_ge(1, i), hits_ge(2, i), hits_ge(4, i), hits_ge(3, i),
-            hits_ge(4, i), hits_ge(5, i);
-        const double gem = Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d>(ge3).eigenvalues()(2);
+        Eigen::Matrix<double_st, 3, 3> ge3;
+        ge3 << static_cast<double_st>(hits_ge(0, i)),
+               static_cast<double_st>(hits_ge(1, i)),
+               static_cast<double_st>(hits_ge(3, i)),
+               static_cast<double_st>(hits_ge(1, i)),
+               static_cast<double_st>(hits_ge(2, i)),
+               static_cast<double_st>(hits_ge(4, i)),
+               static_cast<double_st>(hits_ge(3, i)),
+               static_cast<double_st>(hits_ge(4, i)),
+               static_cast<double_st>(hits_ge(5, i));
+        const double_st gem = Eigen::SelfAdjointEigenSolver<Eigen::Matrix<double_st, 3, 3>>(ge3).eigenvalues()(2);
         if (gem < kE3TwoSGemMin)
           continue;  // not 2S-class variance
-        const Eigen::Matrix2d V = sub[si].measPrec.inverse();
-        Eigen::SelfAdjointEigenSolver<Eigen::Matrix2d> es(V);
-        Eigen::Vector2d ev = es.eigenvalues();
-        const Eigen::Matrix2d Q = es.eigenvectors();
+        const Eigen::Matrix<double_st, 2, 2> V = sub[si].measPrec.inverse();
+        Eigen::SelfAdjointEigenSolver<Eigen::Matrix<double_st, 2, 2>> es(V);
+        Eigen::Vector<double_st, 2> ev = es.eigenvalues();
+        const Eigen::Matrix<double_st, 2, 2> Q = es.eigenvectors();
         ev(1) *= kE3YVarScale;  // eigenvalues ascending: (1) is the along-strip direction
-        const Eigen::Matrix2d Vnew = Q * ev.asDiagonal() * Q.transpose();
+        const Eigen::Matrix<double_st, 2, 2> Vnew = Q * ev.asDiagonal() * Q.transpose();
         sub[si].measPrec = Vnew.inverse();
       }
     }
@@ -638,12 +656,19 @@ namespace {
         const HitInfo& hi = (i < int(rec.info.size())) ? rec.info[i] : kNoInfo2;
         if (!hi.valid || hi.isStub != 1 || hi.isOT == 1)
           continue;
-        if (std::abs(hits(2, i)) < kE10EndcapZ)
+        if (abs(hits(2, i)) < kE10EndcapZ)
           continue;
-        Eigen::Matrix3d ge3;
-        ge3 << hits_ge(0, i), hits_ge(1, i), hits_ge(3, i), hits_ge(1, i), hits_ge(2, i), hits_ge(4, i), hits_ge(3, i),
-            hits_ge(4, i), hits_ge(5, i);
-        const double gem = Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d>(ge3).eigenvalues()(2);
+        Eigen::Matrix<double_st, 3, 3> ge3;
+        ge3 << static_cast<double_st>(hits_ge(0, i)),
+               static_cast<double_st>(hits_ge(1, i)),
+               static_cast<double_st>(hits_ge(3, i)),
+               static_cast<double_st>(hits_ge(1, i)),
+               static_cast<double_st>(hits_ge(2, i)),
+               static_cast<double_st>(hits_ge(4, i)),
+               static_cast<double_st>(hits_ge(3, i)),
+               static_cast<double_st>(hits_ge(4, i)),
+               static_cast<double_st>(hits_ge(5, i));
+        const double_st gem = Eigen::SelfAdjointEigenSolver<Eigen::Matrix<double_st, 3, 3>>(ge3).eigenvalues()(2);
         const bool isps = (hi.sflags > 0) ? ((hi.sflags & kPSBit) != 0) : (gem < kE3TwoSGemMin);
         if (isps)
           continue;  // PS-disk, not 2S-disk
@@ -655,17 +680,17 @@ namespace {
         }
         // rank-1 channel isolation: keep one eigen-direction of the (U,V) measurement covariance and
         // give the other zero weight (infinite variance).
-        const Eigen::Matrix2d V = sub[si].measPrec.inverse();
-        Eigen::SelfAdjointEigenSolver<Eigen::Matrix2d> es(V);
-        const Eigen::Vector2d ev = es.eigenvalues();  // ascending: (0) across-strip, (1) strip
-        const double cond = ev(1) / std::max(ev(0), 1e-300);
+        const Eigen::Matrix<double_st, 2, 2> V = sub[si].measPrec.inverse();
+        Eigen::SelfAdjointEigenSolver<Eigen::Matrix<double_st, 2, 2>> es(V);
+        const Eigen::Vector<double_st, 2> ev = es.eigenvalues();  // ascending: (0) across-strip, (1) strip
+        const double_st cond = ev(1) / fmax(ev(0), 1e-300);
         if (cond < kDegenCond) {
           if (nTwoSDegen)
             ++(*nTwoSDegen);  // no well-defined axis: leave the node untouched, and count it
           continue;
         }
-        const Eigen::Vector2d e = es.eigenvectors().col(twoSMode == kTwoSKeepAcross ? 0 : 1);
-        const double lam = ev(twoSMode == kTwoSKeepAcross ? 0 : 1);
+        const Eigen::Vector<double_st, 2> e = es.eigenvectors().col(twoSMode == kTwoSKeepAcross ? 0 : 1);
+        const double_st lam = ev(twoSMode == kTwoSKeepAcross ? 0 : 1);
         sub[si].measPrec = (e * e.transpose()) / lam;  // rank-1 precision
       }
     }
@@ -677,18 +702,25 @@ namespace {
         const int si = hit0 + i;
         if (!sub[si].hasMeas)
           continue;
-        Eigen::Matrix3d ge3;
-        ge3 << hits_ge(0, i), hits_ge(1, i), hits_ge(3, i), hits_ge(1, i), hits_ge(2, i), hits_ge(4, i), hits_ge(3, i),
-            hits_ge(4, i), hits_ge(5, i);
-        const double gem = Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d>(ge3).eigenvalues()(2);
+        Eigen::Matrix<double_st, 3, 3> ge3;
+        ge3 << static_cast<double_st>(hits_ge(0, i)),
+               static_cast<double_st>(hits_ge(1, i)),
+               static_cast<double_st>(hits_ge(3, i)),
+               static_cast<double_st>(hits_ge(1, i)),
+               static_cast<double_st>(hits_ge(2, i)),
+               static_cast<double_st>(hits_ge(4, i)),
+               static_cast<double_st>(hits_ge(3, i)),
+               static_cast<double_st>(hits_ge(4, i)),
+               static_cast<double_st>(hits_ge(5, i));
+        const double_st gem = Eigen::SelfAdjointEigenSolver<Eigen::Matrix<double_st, 3, 3>>(ge3).eigenvalues()(2);
         if (!geomClassMatches(rank1GeomClass, geomClassOf(gem, hits(2, i))))
           continue;
-        const Eigen::Matrix2d V = sub[si].measPrec.inverse();
-        Eigen::SelfAdjointEigenSolver<Eigen::Matrix2d> es(V);
-        const Eigen::Vector2d ev = es.eigenvalues();
-        if (ev(1) / std::max(ev(0), 1e-300) < kDegenCond)
+        const Eigen::Matrix<double_st, 2, 2> V = sub[si].measPrec.inverse();
+        Eigen::SelfAdjointEigenSolver<Eigen::Matrix<double_st, 2, 2>> es(V);
+        const Eigen::Vector<double_st, 2> ev = es.eigenvalues();
+        if (ev(1) / fmax(ev(0), 1e-300) < kDegenCond)
           continue;                                          // no defined axis: leave untouched
-        const Eigen::Vector2d e = es.eigenvectors().col(0);  // smallest = across-strip
+        const Eigen::Vector<double_st, 2> e = es.eigenvectors().col(0);  // smallest = across-strip
         sub[si].measPrec = (e * e.transpose()) / ev(0);
       }
     }
@@ -697,7 +729,7 @@ namespace {
       sub[hit0 + rec.drop].hasMeas = false;
 
     Vector5d gcorr;
-    double gchi2 = 0.;
+    double_st gchi2 = 0.;
     Matrix5d gcov = gblFitPca(sub, &gcorr, nullptr, &gchi2);
     Vector5d corrPca;
     Matrix5d covPca;
@@ -705,7 +737,7 @@ namespace {
       corrPca = gcorr;
       covPca = gcov;
     } else {
-      const double slopeQ = -double(rec.q) / ff(3);
+      const double_st slopeQ = -static_cast<double_st>(rec.q) / ff(3);
       gcov(1, 1) += th2Inner;
       gcov(2, 2) += th2Inner * (1.0 + slopeQ * slopeQ);
       corrPca = jacBack * gcorr;
@@ -716,7 +748,7 @@ namespace {
     gblHelixAtPca(ff,
                   rec.q,
                   bFit,
-                  double(data.sTransverse(0)),
+                  static_cast<double_st>(data.sTransverse(0)),
                   hits(2, 0),
                   corrPca,
                   covPca,
@@ -724,13 +756,13 @@ namespace {
                   hc,
                   nullptr,
                   kChargeSymmetric);  // production value (useChargeSymmetricCorrections ON)
-    out.pt = bFit / std::abs(hp(2));
-    out.eta = std::asinh(hp(3));
+    out.pt = bFit / abs(hp(2));
+    out.eta = asinh(hp(3));
     out.chi2 = gchi2;
     // sigma(pT)/pT: pT = B/|kappa| => d(pT)/pT = d(kappa)/|kappa|. The ratio is invariant under the
     // SoA 1/pT rescaling, both sides carrying one power of B.
-    out.sigrel = (hc(2, 2) > 0. && hp(2) != 0.) ? std::sqrt(hc(2, 2)) / std::abs(hp(2)) : std::nan("");
-    out.ok = std::isfinite(out.pt) && std::isfinite(out.eta) && out.pt > 0.;
+    out.sigrel = (hc(2, 2) > 0. && hp(2) != 0.) ? sqrt(hc(2, 2)) / abs(hp(2)) : static_cast<double_st>(std::nan(""));
+    out.ok = isfinite(out.pt) && isfinite(out.eta) && out.pt > 0.;
     return out;
   }
 
@@ -739,18 +771,18 @@ namespace {
   // per-segment matXX0 addresses the original segmentation.
   template <int NE>
   ArmFit solveExpanded(const DumpRec& rec,
-                       const std::vector<std::array<double, 3>>& xyz,
-                       const std::vector<std::array<double, 6>>& ge,
-                       const Eigen::Vector4d& ff,
-                       double bFit,
+                       const std::vector<std::array<double_st, 3>>& xyz,
+                       const std::vector<std::array<double_st, 6>>& ge,
+                       const Eigen::Vector<double_st, 4>& ff,
+                       double_st bFit,
                        bool rank1Across) {
-    Eigen::Matrix<double, 3, NE> hits;
-    Eigen::Matrix<float, 6, NE> hits_ge;
+    Eigen::Matrix<double_st, 3, NE> hits;
+    Eigen::Matrix<float_st, 6, NE> hits_ge;
     for (int i = 0; i < NE; ++i) {
       for (int k = 0; k < 3; ++k)
         hits(k, i) = xyz[i][k];
       for (int k = 0; k < 6; ++k)
-        hits_ge(k, i) = float(ge[i][k]);
+        hits_ge(k, i) = static_cast<float_st>(ge[i][k]);
     }
     brokenline::PreparedBrokenLineData<NE> data;
     brokenline::prepareBrokenLineData(hits, ff, bFit, data);
@@ -758,6 +790,7 @@ namespace {
     gblTestMaterial::fillMatData<NE>(hits, md);
     riemannFit::VectorNd<NE> matD;
     for (int i = 0; i < NE; ++i)
+      // INFO> CADNA NEEDS TO REMAIN DOUBLE
       matD(i) = (i + 1 < NE) ? md.matXX0[i] : 0.;
     DumpRec r2 = rec;
     r2.drop = -1;  // the dumped drop index addresses the original hit list
@@ -780,10 +813,10 @@ namespace {
 
   ArmFit dispatchExpanded(int ne,
                           const DumpRec& rec,
-                          const std::vector<std::array<double, 3>>& xyz,
-                          const std::vector<std::array<double, 6>>& ge,
-                          const Eigen::Vector4d& ff,
-                          double bFit,
+                          const std::vector<std::array<double_st, 3>>& xyz,
+                          const std::vector<std::array<double_st, 6>>& ge,
+                          const Eigen::Vector<double_st, 4>& ff,
+                          double_st bFit,
                           bool rank1) {
     switch (ne) {
 #define U3CASE(N) \
@@ -818,21 +851,21 @@ namespace {
   // replay path (same helper, all levers at production values), so pt0 doubles as a self-check.
   template <int N>
   void processTrackArm(const DumpRec& rec) {
-    Eigen::Matrix<double, 3, N> hits;
-    Eigen::Matrix<float, 6, N> hits_ge;
+    Eigen::Matrix<double_st, 3, N> hits;
+    Eigen::Matrix<float_st, 6, N> hits_ge;
     for (int i = 0; i < N; ++i) {
       for (int k = 0; k < 3; ++k)
         hits(k, i) = rec.xyz[i][k];
       for (int k = 0; k < 6; ++k)
-        hits_ge(k, i) = float(rec.ge[i][k]);
+        hits_ge(k, i) = static_cast<float_st>(rec.ge[i][k]);
     }
-    Eigen::Vector4d ff(rec.ff[0], rec.ff[1], rec.ff[2], rec.ff[3]);
-    const double bFit = rec.fitB();
+    Eigen::Vector<double_st, 4> ff(rec.ff[0], rec.ff[1], rec.ff[2], rec.ff[3]);
+    const double_st bFit = rec.fitB();
     brokenline::PreparedBrokenLineData<N> data;
     brokenline::prepareBrokenLineData(hits, ff, bFit, data);
     riemannFit::VectorNd<N> matD;
     for (int i = 0; i < N; ++i)
-      matD(i) = (i + 1 < N) ? rec.matXX0[i] : 0.;
+      matD(i) = (i + 1 < N) ? rec.matXX0[i] : static_cast<double_st>(0.);
 
     ArmFit nomBase = solveOnce<N>(rec, hits, hits_ge, ff, data, matD, bFit, rec.innerXX0, false);
     ArmFit nomOverride;
@@ -850,14 +883,14 @@ namespace {
       // Build the expanded hit list: every 2S-disk stub with a valid sensor pair is replaced by its two
       // per-sensor rechits (dumped `lo`/`up`). Both sensors of a 2S stack are parallel and share the
       // pitch and the strip length, so each sensor node inherits the stub's own global covariance.
-      std::vector<std::array<double, 3>> xyz;
-      std::vector<std::array<double, 6>> ge;
+      std::vector<std::array<double_st, 3>> xyz;
+      std::vector<std::array<double_st, 6>> ge;
       int nsplit = 0;
       for (int i = 0; i < N; ++i) {
         const HitInfo& hi = (i < int(rec.info.size())) ? rec.info[i] : kNoInfoArm;
         const bool twoSdisk = hi.valid && hi.isStub == 1 && hi.isOT == 0 && hi.pair == 1 &&
-                              std::abs(hits(2, i)) >= kE12EndcapZ && !(hi.sflags > 0 && (hi.sflags & kPSBit));
-        std::array<double, 6> g6{rec.ge[i][0], rec.ge[i][1], rec.ge[i][2], rec.ge[i][3], rec.ge[i][4], rec.ge[i][5]};
+                              abs(hits(2, i)) >= kE12EndcapZ && !(hi.sflags > 0 && (hi.sflags & kPSBit));
+        std::array<double_st, 6> g6{rec.ge[i][0], rec.ge[i][1], rec.ge[i][2], rec.ge[i][3], rec.ge[i][4], rec.ge[i][5]};
         if (twoSdisk) {
           xyz.push_back({hi.lo[0], hi.lo[1], hi.lo[2]});
           ge.push_back(g6);
@@ -896,21 +929,28 @@ namespace {
 
     const ArmFit& nom = useNomOverride ? nomOverride : nomBase;
     // Per-hit context the band/class splits need: hit0 radius, and the 2S-endcap node count (arm 3 scope).
-    const double r0 = std::hypot(hits(0, 0), hits(1, 0));
+    const double_st r0 = hypot(hits(0, 0), hits(1, 0));
     int n2Sec = 0, nStub = 0;
     for (int i = 0; i < N; ++i) {
       const bool st = (i < int(rec.info.size()) && rec.info[i].valid) ? (rec.info[i].isStub == 1) : false;
       if (st)
         ++nStub;
-      if (st && std::abs(hits(2, i)) > kE3EndcapZ) {
-        Eigen::Matrix3d ge3;
-        ge3 << hits_ge(0, i), hits_ge(1, i), hits_ge(3, i), hits_ge(1, i), hits_ge(2, i), hits_ge(4, i), hits_ge(3, i),
-            hits_ge(4, i), hits_ge(5, i);
-        if (Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d>(ge3).eigenvalues()(2) >= kE3TwoSGemMin)
+      if (st && abs(hits(2, i)) > kE3EndcapZ) {
+        Eigen::Matrix<double_st, 3, 3> ge3;
+        ge3 << static_cast<double_st>(hits_ge(0, i)),
+               static_cast<double_st>(hits_ge(1, i)),
+               static_cast<double_st>(hits_ge(3, i)),
+               static_cast<double_st>(hits_ge(1, i)),
+               static_cast<double_st>(hits_ge(2, i)),
+               static_cast<double_st>(hits_ge(4, i)),
+               static_cast<double_st>(hits_ge(3, i)),
+               static_cast<double_st>(hits_ge(4, i)),
+               static_cast<double_st>(hits_ge(5, i));
+        if (Eigen::SelfAdjointEigenSolver<Eigen::Matrix<double_st, 3, 3>>(ge3).eigenvalues()(2) >= kE3TwoSGemMin)
           ++n2Sec;
       }
     }
-    const double dpt = (nom.ok && arm.ok) ? (arm.pt - nom.pt) / nom.pt : std::nan("");
+    const double_st dpt = (nom.ok && arm.ok) ? (arm.pt - nom.pt) / nom.pt : static_cast<double_st>(std::nan(""));
     // Type of the hit the device's in-fit outlier stage dropped (arm 7 split): -1 none, 0 pixel, 1 stub.
     int droptype = -1;
     if (rec.drop >= 0 && rec.drop < N && rec.drop < int(rec.info.size()) && rec.info[rec.drop].valid)
@@ -923,21 +963,21 @@ namespace {
         rec.tk,
         N,
         rec.q,
-        nom.eta,
-        nom.pt,
-        arm.pt,
-        dpt,
-        nom.chi2,
-        arm.chi2,
-        r0,
+        static_cast<double>(nom.eta),
+        static_cast<double>(nom.pt),
+        static_cast<double>(arm.pt),
+        static_cast<double>(dpt),
+        static_cast<double>(nom.chi2),
+        static_cast<double>(arm.chi2),
+        static_cast<double>(r0),
         nStub,
         n2Sec,
         (nom.ok && arm.ok) ? 1 : 0,
-        rec.innerXX0,
-        nom.sigrel,
+        static_cast<double>(rec.innerXX0),
+        static_cast<double>(nom.sigrel),
         rec.drop,
         droptype,
-        arm.sigrel,
+        static_cast<double>(arm.sigrel),
         n2Sd,
         n2Sdeg,
         // measurements left in the arm fit: N minus the device drop minus the arm-8 removals
@@ -1072,9 +1112,9 @@ int main(int argc, char** argv) {
     } else if (tag == "BLDUMP_HIT") {
       unsigned tk;
       int i;
-      std::array<double, 3> p;
-      std::array<double, 6> g;
-      double m;
+      std::array<double_st, 3> p;
+      std::array<double_st, 6> g;
+      double_st m;
       ss >> tk >> i >> p[0] >> p[1] >> p[2] >> g[0] >> g[1] >> g[2] >> g[3] >> g[4] >> g[5] >> m;
       auto it = idx.find(tk);
       if (!ss || it == idx.end()) {

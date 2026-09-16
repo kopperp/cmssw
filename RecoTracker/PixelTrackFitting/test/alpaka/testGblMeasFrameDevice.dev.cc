@@ -38,6 +38,7 @@
 #include "HeterogeneousCore/AlpakaInterface/interface/config.h"
 #include "HeterogeneousCore/AlpakaInterface/interface/memory.h"
 #include "HeterogeneousCore/AlpakaInterface/interface/workdivision.h"
+#include "Utilities/Cadna/interface/CadnaEigenTypes.h"
 
 #include "RecoTracker/PixelTrackFitting/interface/BLMaterialMap.h"
 #include "RecoTracker/PixelTrackFitting/interface/BrokenLine.h"                // upstream host fastFit
@@ -87,29 +88,29 @@ namespace {
 
   struct BuildKernel {
     ALPAKA_FN_ACC void operator()(Acc1D const& acc,
-                                  double const* hitsIn,
-                                  float const* geIn,
-                                  double const* ffIn,
+                                  double_st const* hitsIn,
+                                  float_st const* geIn,
+                                  double_st const* ffIn,
                                   float const* rho,
                                   double bField,
                                   gbld::GblNodeData* nodes,
-                                  double* out) const {
+                                  double_st* out) const {
       for ([[maybe_unused]] auto lane : cms::alpakatools::uniform_elements(acc, 1)) {
-        Eigen::Matrix<double, 3, kN> hits;
-        Eigen::Matrix<float, 6, kN> hits_ge;
+        Eigen::Matrix<double_st, 3, kN> hits;
+        Eigen::Matrix<float_st, 6, kN> hits_ge;
         for (int c = 0; c < kN; ++c) {
           for (int r = 0; r < 3; ++r)
             hits(r, c) = hitsIn[3 * c + r];
           for (int r = 0; r < 6; ++r)
             hits_ge(r, c) = geIn[6 * c + r];
         }
-        const Eigen::Vector4d ff(ffIn[0], ffIn[1], ffIn[2], ffIn[3]);
+        const Eigen::Vector<double_st, 4> ff(ffIn[0], ffIn[1], ffIn[2], ffIn[3]);
 
         bld::PreparedGblData<kN> data;
-        double gapD1[kN], gapW1[kN];
+        double_st gapD1[kN], gapW1[kN];
         bld::prepareGblFitData(acc, hits, ff, bField, rho, data, /*matCached=*/nullptr, gapD1, gapW1);
-        const double rHit0 = alpaka::math::sqrt(acc, hits(0, 0) * hits(0, 0) + hits(1, 0) * hits(1, 0));
-        double innerD1 = 0., innerW1 = 0.;
+        const double_st rHit0 = alpaka::math::sqrt(acc, hits(0, 0) * hits(0, 0) + hits(1, 0) * hits(1, 0));
+        double_st innerD1 = 0., innerW1 = 0.;
         if (data.innerXX0 > 0.)
           bld::segmentXX0GapSplit(acc, rho, 0., 0., rHit0, hits(2, 0), innerD1, innerW1);
 
@@ -136,26 +137,26 @@ namespace {
                                                                     kScatteringLogAtTotal,
                                                                     kElossCumulative);
         out[kOutUsedSplit] = usedSplit ? 1. : 0.;
-        out[kOutQCharge] = double(data.qCharge);
+        out[kOutQCharge] = static_cast<double_st>(data.qCharge);
         for (int i = 0; i < kN; ++i)
-          out[kOutSTransverse + i] = double(data.sTransverse(i));
+          out[kOutSTransverse + i] = static_cast<double_st>(data.sTransverse(i));
       }
     }
   };
 
   struct SolveKernel {
     ALPAKA_FN_ACC void operator()(
-        Acc1D const& acc, gbld::GblNodeData const* nodesAll, double* scratch, double* out, int nChains) const {
+        Acc1D const& acc, gbld::GblNodeData const* nodesAll, double_st* scratch, double_st* out, int nChains) const {
       for (auto v : cms::alpakatools::uniform_elements(acc, nChains)) {
         gbld::Vector5d corr = gbld::Vector5d::Zero();
-        double chi2 = 0.;
+        double_st chi2 = 0.;
         const auto cov = gbld::gblFitPca<Acc1D, kM>(acc,
                                                     nodesAll + int(v) * kNodes,
                                                     scratch + int(v) * gbld::kGblScratchDoubles<kM>,
                                                     &corr,
                                                     /*fullDelta=*/nullptr,
                                                     &chi2);
-        double* o = out + int(v) * kFitOutSize;
+        double_st* o = out + int(v) * kFitOutSize;
         for (int a = 0; a < 5; ++a) {
           o[kFitCorr + a] = corr(a);
           for (int b = 0; b < 5; ++b)
@@ -169,47 +170,47 @@ namespace {
   //!< the sensor frame recovered from the rank-2 global hit covariance ge3 = R^T diag(xel, 0, yel) R.
   struct SensorFrame {
     gblh::Vector3d lx, ly, n;
-    double xel = 0., yel = 0.;
+    double_st xel = 0., yel = 0.;
   };
 
   SensorFrame sensorFrameFromGe3(const gblh::Matrix3d& ge3) {
     SensorFrame f;
     f.n = gblh::planeNormalFromGe3(ge3);
-    const gblh::Vector3d a = (std::abs(f.n.x()) < 0.9) ? gblh::Vector3d(1, 0, 0) : gblh::Vector3d(0, 1, 0);
+    const gblh::Vector3d a = (abs(f.n.x()) < 0.9) ? gblh::Vector3d(1, 0, 0) : gblh::Vector3d(0, 1, 0);
     const gblh::Vector3d e1 = (a - a.dot(f.n) * f.n).normalized();
     const gblh::Vector3d e2 = f.n.cross(e1);
-    Eigen::Matrix2d g;
+    Eigen::Matrix<double_st, 2, 2> g;
     g(0, 0) = e1.dot(ge3 * e1);
     g(0, 1) = g(1, 0) = e1.dot(ge3 * e2);
     g(1, 1) = e2.dot(ge3 * e2);
-    Eigen::SelfAdjointEigenSolver<Eigen::Matrix2d> es(g);  // ascending eigenvalues
+    Eigen::SelfAdjointEigenSolver<Eigen::Matrix<double_st, 2, 2>> es(g);  // ascending eigenvalues
     f.xel = es.eigenvalues()(0);
     f.yel = es.eigenvalues()(1);
-    const Eigen::Vector2d v0 = es.eigenvectors().col(0), v1 = es.eigenvectors().col(1);
+    const Eigen::Vector<double_st, 2> v0 = es.eigenvectors().col(0), v1 = es.eigenvectors().col(1);
     f.lx = (v0(0) * e1 + v0(1) * e2).normalized();
     f.ly = (v1(0) * e1 + v1(1) * e2).normalized();
     return f;
   }
 
   struct MaxRel {
-    double v = 0.;
+    double_st v = 0.;
     bool any = false;
-    void add(double got, double ref) {
-      if (std::abs(ref) > 1e-30) {
+    void add(double_st got, double_st ref) {
+      if (abs(ref) > 1e-30) {
         any = true;
-        v = std::max(v, std::abs(got - ref) / std::abs(ref));
+        v = std::max(v, abs(got - ref) / abs(ref));
       }
     }
   };
 
   //!< max relative difference between two 2x2 blocks, gated on the reference's own largest entry.
-  double maxRelBlock(const Eigen::Matrix2d& got, const Eigen::Matrix2d& ref) {
-    const double scale = ref.cwiseAbs().maxCoeff();
-    double m = 0.;
+  double_st maxRelBlock(const Eigen::Matrix<double_st, 2, 2>& got, const Eigen::Matrix<double_st, 2, 2>& ref) {
+    const double_st scale = ref.cwiseAbs().maxCoeff();
+    double_st m = 0.;
     for (int a = 0; a < 2; ++a)
       for (int b = 0; b < 2; ++b)
-        if (std::abs(ref(a, b)) > kEntryGate * scale)
-          m = std::max(m, std::abs(got(a, b) - ref(a, b)) / std::abs(ref(a, b)));
+        if (abs(ref(a, b)) > kEntryGate * scale)
+          m = std::max(m, abs(got(a, b) - ref(a, b)) / abs(ref(a, b)));
     return m;
   }
 
@@ -220,8 +221,8 @@ namespace {
   void runFixture(Queue& queue, const char* devName, const char* label, const double D[kN][9], const float* rhoDev) {
     constexpr double kB = gblTestFixtures::kB;
 
-    Eigen::Matrix<double, 3, kN> hits;
-    Eigen::Matrix<float, 6, kN> hits_ge = Eigen::Matrix<float, 6, kN>::Zero();
+    Eigen::Matrix<double_st, 3, kN> hits;
+    Eigen::Matrix<float_st, 6, kN> hits_ge = Eigen::Matrix<float_st, 6, kN>::Zero();
     for (int k = 0; k < kN; ++k) {
       hits(0, k) = D[k][0];
       hits(1, k) = D[k][1];
@@ -229,12 +230,12 @@ namespace {
       const double zz = (D[k][8] > 0.) ? D[k][8] : 1.0;
       hits_ge.col(k) << D[k][3], D[k][4], D[k][5], D[k][6], D[k][7], zz;
     }
-    Eigen::Vector4d ff;
+    Eigen::Vector<double_st, 4> ff;
     blh::fastFit(hits, ff);
 
-    auto hits_h = cms::alpakatools::make_host_buffer<double[], Platform>(3 * kN);
-    auto ge_h = cms::alpakatools::make_host_buffer<float[], Platform>(6 * kN);
-    auto ff_h = cms::alpakatools::make_host_buffer<double[], Platform>(4);
+    auto hits_h = cms::alpakatools::make_host_buffer<double_st[], Platform>(3 * kN);
+    auto ge_h = cms::alpakatools::make_host_buffer<float_st[], Platform>(6 * kN);
+    auto ff_h = cms::alpakatools::make_host_buffer<double_st[], Platform>(4);
     for (int c = 0; c < kN; ++c) {
       for (int r = 0; r < 3; ++r)
         hits_h[3 * c + r] = hits(r, c);
@@ -244,13 +245,13 @@ namespace {
     for (int j = 0; j < 4; ++j)
       ff_h[j] = ff(j);
 
-    auto hits_d = cms::alpakatools::make_device_buffer<double[]>(queue, 3 * kN);
-    auto ge_d = cms::alpakatools::make_device_buffer<float[]>(queue, 6 * kN);
-    auto ff_d = cms::alpakatools::make_device_buffer<double[]>(queue, 4);
+    auto hits_d = cms::alpakatools::make_device_buffer<double_st[]>(queue, 3 * kN);
+    auto ge_d = cms::alpakatools::make_device_buffer<float_st[]>(queue, 6 * kN);
+    auto ff_d = cms::alpakatools::make_device_buffer<double_st[]>(queue, 4);
     auto nodes_d = cms::alpakatools::make_device_buffer<gbld::GblNodeData[]>(queue, kNodes);
-    auto bout_d = cms::alpakatools::make_device_buffer<double[]>(queue, kBuildOutSize);
+    auto bout_d = cms::alpakatools::make_device_buffer<double_st[]>(queue, kBuildOutSize);
     auto nodes_h = cms::alpakatools::make_host_buffer<gbld::GblNodeData[], Platform>(kNodes);
-    auto bout_h = cms::alpakatools::make_host_buffer<double[], Platform>(kBuildOutSize);
+    auto bout_h = cms::alpakatools::make_host_buffer<double_st[], Platform>(kBuildOutSize);
     alpaka::memcpy(queue, hits_d, hits_h);
     alpaka::memcpy(queue, ge_d, ge_h);
     alpaka::memcpy(queue, ff_d, ff_h);
@@ -281,10 +282,10 @@ namespace {
     REQUIRE(int(hitNode.size()) == kN);
 
     // the reference helix, exactly as the device builder formed it
-    const double cx = ff(0), cy = ff(1), R = ff(2);
-    const double slope = -double(qCharge) / ff(3);
-    const double invn = 1. / std::sqrt(1. + slope * slope);
-    const double z0 = hits(2, 0) - slope * bout_h[kOutSTransverse];
+    const double_st cx = ff(0), cy = ff(1), R = ff(2);
+    const double_st slope = -static_cast<double_st>(qCharge) / ff(3);
+    const double_st invn = 1. / sqrt(1. + slope * slope);
+    const double_st z0 = hits(2, 0) - slope * bout_h[kOutSTransverse];
 
     std::vector<std::vector<gblh::GblNodeData>> hv(kTreatments, std::vector<gblh::GblNodeData>(kNodes));
     for (int k = 0; k < kNodes; ++k)
@@ -297,8 +298,8 @@ namespace {
         hv[t][k].hasScat = nodes_h[k].hasScat;
       }
 
-    double worstSchur = 0., worstPrecMf = 0., worstResMf = 0., worstPrecGt = 0., worstResGt = 0., worstChi2 = 0.;
-    double worstTNorm = 0., totKfChi2 = 0., totNodeChi2 = 0.;
+    double_st worstSchur = 0., worstPrecMf = 0., worstResMf = 0., worstPrecGt = 0., worstResGt = 0., worstChi2 = 0.;
+    double_st worstTNorm = 0., totKfChi2 = 0., totNodeChi2 = 0.;
     std::printf("\n  ---- %s (%s) ----\n", label, devName);
     std::printf(
         "   i  type    incid[deg]  xel[um]   yel[um]  |detA|   ||T||-1 | H*A^T-I  prec(H)   resid(H)  prec(Gt)  "
@@ -309,9 +310,9 @@ namespace {
           hits_ge(4, i), hits_ge(5, i);
 
       // curvilinear frame at the hit, the same expressions as alpaka/GeneralBrokenLine.h emitHit
-      const double rx = (hits(0, i) - cx) / R, ry = (hits(1, i) - cy) / R;
-      const gblh::Vector3d T(double(qCharge) * ry * invn, -double(qCharge) * rx * invn, slope * invn);
-      const double un = 1. / std::sqrt(T.x() * T.x() + T.y() * T.y());
+      const double_st rx = (hits(0, i) - cx) / R, ry = (hits(1, i) - cy) / R;
+      const gblh::Vector3d T(static_cast<double_st>(qCharge) * ry * invn, -static_cast<double_st>(qCharge) * rx * invn, slope * invn);
+      const double_st un = 1. / sqrt(T.x() * T.x() + T.y() * T.y());
       const gblh::Vector3d U(-T.y() * un, T.x() * un, 0.);
       const gblh::Vector3d V = T.cross(U);
       gblh::Matrix23d Ruv;
@@ -319,43 +320,43 @@ namespace {
       Ruv.row(1) = V.transpose();
 
       // the reference-helix point and the raw 3-D residual, identical to the device's
-      const double dvx = hits(0, i) - cx, dvy = hits(1, i) - cy, dmag = std::hypot(dvx, dvy);
+      const double_st dvx = hits(0, i) - cx, dvy = hits(1, i) - cy, dmag = hypot(dvx, dvy);
       const gblh::Vector3d rref(cx + R * dvx / dmag, cy + R * dvy / dmag, z0 + slope * bout_h[kOutSTransverse + i]);
       const gblh::Vector3d residual3 = gblh::Vector3d(hits.col(i)) - rref;
 
       // MODFRAME: the sensor frame and the obliquity-correct Jacobian
       const SensorFrame f = sensorFrameFromGe3(ge3);
-      const double nT = f.n.dot(T);
-      Eigen::Matrix2d A;
+      const double_st nT = f.n.dot(T);
+      Eigen::Matrix<double_st, 2, 2> A;
       A << f.lx.dot(U), f.lx.dot(V), f.ly.dot(U), f.ly.dot(V);
-      const Eigen::Vector2d cvec(f.lx.dot(T), f.ly.dot(T));
-      const Eigen::Vector2d bvec(f.n.dot(U), f.n.dot(V));
-      const Eigen::Matrix2d H = A - (1. / nT) * cvec * bvec.transpose();
+      const Eigen::Vector<double_st, 2> cvec(f.lx.dot(T), f.ly.dot(T));
+      const Eigen::Vector<double_st, 2> bvec(f.n.dot(U), f.n.dot(V));
+      const Eigen::Matrix<double_st, 2, 2> H = A - (1. / nT) * cvec * bvec.transpose();
       // The Schur identity assumes both frames orthonormal, but (U, V, T) as the production builder forms
       // it is orthogonal and not normalized: |T| = 1 only where the hit lies on the fast-fit circle, and
       // departs from it by the hit's radial residual over R. The identity is checked on a normalized copy.
       const gblh::Vector3d Tn = T.normalized();
-      const double unn = 1. / std::sqrt(Tn.x() * Tn.x() + Tn.y() * Tn.y());
+      const double_st unn = 1. / sqrt(Tn.x() * Tn.x() + Tn.y() * Tn.y());
       const gblh::Vector3d Un(-Tn.y() * unn, Tn.x() * unn, 0.);
       const gblh::Vector3d Vn = Tn.cross(Un);
-      Eigen::Matrix2d An;
+      Eigen::Matrix<double_st, 2, 2> An;
       An << f.lx.dot(Un), f.lx.dot(Vn), f.ly.dot(Un), f.ly.dot(Vn);
-      const Eigen::Vector2d cn(f.lx.dot(Tn), f.ly.dot(Tn));
-      const Eigen::Vector2d bn(f.n.dot(Un), f.n.dot(Vn));
-      const Eigen::Matrix2d Hn = An - (1. / f.n.dot(Tn)) * cn * bn.transpose();
-      const Eigen::Matrix2d wInv = Eigen::Vector2d(1. / f.xel, 1. / f.yel).asDiagonal();
+      const Eigen::Vector<double_st, 2> cn(f.lx.dot(Tn), f.ly.dot(Tn));
+      const Eigen::Vector<double_st, 2> bn(f.n.dot(Un), f.n.dot(Vn));
+      const Eigen::Matrix<double_st, 2, 2> Hn = An - (1. / f.n.dot(Tn)) * cn * bn.transpose();
+      const Eigen::Matrix<double_st, 2, 2> wInv = Eigen::Vector<double_st, 2>(1. / f.xel, 1. / f.yel).asDiagonal();
       // the module-plane crossing: move along T from the reference point until n.(x - hit) == 0.
-      const double tpar = -f.n.dot(rref - gblh::Vector3d(hits.col(i))) / nT;
+      const double_st tpar = -f.n.dot(rref - gblh::Vector3d(hits.col(i))) / nT;
       const gblh::Vector3d dloc = gblh::Vector3d(hits.col(i)) - (rref + tpar * T);
-      const Eigen::Vector2d rLocal(f.lx.dot(dloc), f.ly.dot(dloc));
-      const Eigen::Matrix2d precMf = H.transpose() * wInv * H;
-      const Eigen::Vector2d resMf = H.inverse() * rLocal;
-      const double kfChi2 = rLocal.dot(wInv * rLocal);
+      const Eigen::Vector<double_st, 2> rLocal(f.lx.dot(dloc), f.ly.dot(dloc));
+      const Eigen::Matrix<double_st, 2, 2> precMf = H.transpose() * wInv * H;
+      const Eigen::Vector<double_st, 2> resMf = H.inverse() * rLocal;
+      const double_st kfChi2 = rLocal.dot(wInv * rLocal);
 
       // the Schur identity, H == A^-T, in pure double on the normalized frame
-      const double schur = (Hn * An.transpose() - Eigen::Matrix2d::Identity()).cwiseAbs().maxCoeff();
+      const double_st schur = (Hn * An.transpose() - Eigen::Matrix<double_st, 2, 2>::Identity()).cwiseAbs().maxCoeff();
       worstSchur = std::max(worstSchur, schur);
-      const double tNorm = std::abs(T.norm() - 1.);
+      const double_st tNorm = abs(T.norm() - 1.);
       worstTNorm = std::max(worstTNorm, tNorm);
 
       // GTILDE: the same measurement with no eigendecomposition
@@ -363,25 +364,25 @@ namespace {
       const gblh::Matrix3d gp = gblh::pseudoInverseGe3(ge3);
       const gblh::Matrix3d M = gblh::Matrix3d::Identity() - (T * nrm.transpose()) * (1.0 / nrm.dot(T));
       const gblh::Matrix3d gTilde = M.transpose() * gp * M;
-      const Eigen::Matrix2d precGt = Ruv * gTilde * Ruv.transpose();
-      const Eigen::Vector2d resGt = precGt.inverse() * (Ruv * (gTilde * residual3));
+      const Eigen::Matrix<double_st, 2, 2> precGt = Ruv * gTilde * Ruv.transpose();
+      const Eigen::Vector<double_st, 2> resGt = precGt.inverse() * (Ruv * (gTilde * residual3));
 
       // what the device actually produced
-      const Eigen::Matrix2d precDev = nodes_h[hitNode[i]].measPrec;
-      const Eigen::Vector2d resDev = nodes_h[hitNode[i]].measResidual;
-      const double nodeChi2 = resDev.dot(precDev * resDev);
+      const Eigen::Matrix<double_st, 2, 2> precDev = nodes_h[hitNode[i]].measPrec;
+      const Eigen::Vector<double_st, 2> resDev = nodes_h[hitNode[i]].measResidual;
+      const double_st nodeChi2 = resDev.dot(precDev * resDev);
 
-      const double relPrecMf = maxRelBlock(precDev, precMf);
-      const double relPrecGt = maxRelBlock(precDev, precGt);
-      const double relResMf = (resDev - resMf).norm() / std::max(1e-300, resMf.norm());
-      const double relResGt = (resDev - resGt).norm() / std::max(1e-300, resGt.norm());
+      const double_st relPrecMf = maxRelBlock(precDev, precMf);
+      const double_st relPrecGt = maxRelBlock(precDev, precGt);
+      const double_st relResMf = (resDev - resMf).norm() / fmax(1e-300, resMf.norm());
+      const double_st relResGt = (resDev - resGt).norm() / fmax(1e-300, resGt.norm());
       MaxRel rChi2;
       rChi2.add(nodeChi2, kfChi2);
       worstPrecMf = std::max(worstPrecMf, relPrecMf);
       worstPrecGt = std::max(worstPrecGt, relPrecGt);
       worstResMf = std::max(worstResMf, relResMf);
       worstResGt = std::max(worstResGt, relResGt);
-      worstChi2 = std::max(worstChi2, rChi2.v);
+      worstChi2 = fmax(worstChi2, rChi2.v);
       totKfChi2 += kfChi2;
       totNodeChi2 += nodeChi2;
       REQUIRE(resMf.norm() > 0.);
@@ -391,17 +392,17 @@ namespace {
       std::printf("   %d %s %8.1f %9.2f %9.2e %7.4f %8.1e | %.2e  %.2e  %.2e  %.2e  %.2e  %.2e\n",
                   i,
                   tp,
-                  std::acos(std::min(1.0, std::abs(nT / T.norm()))) * 180. / M_PI,
-                  1e4 * std::sqrt(std::abs(f.xel)),
-                  1e4 * std::sqrt(std::abs(f.yel)),
-                  std::abs(A.determinant()),
-                  tNorm,
-                  schur,
-                  relPrecMf,
-                  relResMf,
-                  relPrecGt,
-                  relResGt,
-                  rChi2.v);
+                  static_cast<double>(acos(fmin(1.0, abs(nT / T.norm()))) * 180. / M_PI),
+                  static_cast<double>(1e4 * sqrt(abs(f.xel))),
+                  static_cast<double>(1e4 * sqrt(abs(f.yel))),
+                  static_cast<double>(abs(A.determinant())),
+                  static_cast<double>(tNorm),
+                  static_cast<double>(schur),
+                  static_cast<double>(relPrecMf),
+                  static_cast<double>(relResMf),
+                  static_cast<double>(relPrecGt),
+                  static_cast<double>(relResGt),
+                  static_cast<double>(rChi2.v));
 
       REQUIRE(rChi2.any);
 
@@ -413,16 +414,16 @@ namespace {
     std::printf(
         "   pre-fit chi2 total: node=%.9g  KF-REF=%.9g (rel %.1e) | worst: ||T||-1=%.1e Schur=%.1e prec(H)=%.1e "
         "res(H)=%.1e prec(Gt)=%.1e res(Gt)=%.1e chi2=%.1e\n",
-        totNodeChi2,
-        totKfChi2,
-        std::abs(totNodeChi2 - totKfChi2) / std::max(1e-300, std::abs(totKfChi2)),
-        worstTNorm,
-        worstSchur,
-        worstPrecMf,
-        worstResMf,
-        worstPrecGt,
-        worstResGt,
-        worstChi2);
+        static_cast<double>(totNodeChi2),
+        static_cast<double>(totKfChi2),
+        static_cast<double>(abs(totNodeChi2 - totKfChi2) / fmax(1e-300, abs(totKfChi2))),
+        static_cast<double>(worstTNorm),
+        static_cast<double>(worstSchur),
+        static_cast<double>(worstPrecMf),
+        static_cast<double>(worstResMf),
+        static_cast<double>(worstPrecGt),
+        static_cast<double>(worstResGt),
+        static_cast<double>(worstChi2));
 
     REQUIRE(totKfChi2 > 0.);
     REQUIRE(worstSchur < kTolSchur);
@@ -431,7 +432,7 @@ namespace {
     REQUIRE(worstPrecGt < kTolPrec);
     REQUIRE(worstResGt < kTolResid);
     REQUIRE(worstChi2 < kTolChi2);
-    REQUIRE(std::abs(totNodeChi2 - totKfChi2) / std::max(1e-300, std::abs(totKfChi2)) < kTolChi2Total);
+    REQUIRE(abs(totNodeChi2 - totKfChi2) / fmax(1e-300, abs(totKfChi2)) < kTolChi2Total);
 
     // and therefore the three chains fit to the same answer
     auto dv_h = cms::alpakatools::make_host_buffer<gbld::GblNodeData[], Platform>(kTreatments * kNodes);
@@ -447,9 +448,9 @@ namespace {
         dv_h[t * kNodes + k] = d;
       }
     auto dv_d = cms::alpakatools::make_device_buffer<gbld::GblNodeData[]>(queue, kTreatments * kNodes);
-    auto scr_d = cms::alpakatools::make_device_buffer<double[]>(queue, kTreatments * gbld::kGblScratchDoubles<kM>);
-    auto fout_d = cms::alpakatools::make_device_buffer<double[]>(queue, kTreatments * kFitOutSize);
-    auto fout_h = cms::alpakatools::make_host_buffer<double[], Platform>(kTreatments * kFitOutSize);
+    auto scr_d = cms::alpakatools::make_device_buffer<double_st[]>(queue, kTreatments * gbld::kGblScratchDoubles<kM>);
+    auto fout_d = cms::alpakatools::make_device_buffer<double_st[]>(queue, kTreatments * kFitOutSize);
+    auto fout_h = cms::alpakatools::make_host_buffer<double_st[], Platform>(kTreatments * kFitOutSize);
     alpaka::memcpy(queue, dv_d, dv_h);
     alpaka::memset(queue, fout_d, 0);
     alpaka::exec<Acc1D>(queue,
@@ -465,10 +466,10 @@ namespace {
     const char* tname[kTreatments] = {"CURRENT (as built)", "MODFRAME (H)", "GTILDE (prod-portable)"};
     for (int t = 0; t < kTreatments; ++t) {
       gblh::Vector5d hostCorr;
-      double hostChi2 = 0.;
+      double_st hostChi2 = 0.;
       const gblh::Matrix5d hostCov = gblh::gblFitPca(hv[t], &hostCorr, nullptr, &hostChi2);
       MaxRel cov, corr, chi2;
-      const double* o = &fout_h[t * kFitOutSize];
+      const double_st* o = &fout_h[t * kFitOutSize];
       for (int a = 0; a < 5; ++a) {
         corr.add(o[kFitCorr + a], hostCorr(a));
         for (int b = 0; b < 5; ++b)
@@ -477,11 +478,11 @@ namespace {
       chi2.add(o[kFitChi2], hostChi2);
       std::printf("   %-24s sigma(q/p)=%.6e chi2=%9.4f | twin cov=%.1e corr=%.1e chi2=%.1e\n",
                   tname[t],
-                  std::sqrt(std::abs(o[kFitCov])),
-                  o[kFitChi2],
-                  cov.v,
-                  corr.v,
-                  chi2.v);
+                  static_cast<double>(sqrt(abs(o[kFitCov]))),
+                  static_cast<double>(o[kFitChi2]),
+                  static_cast<double>(cov.v),
+                  static_cast<double>(corr.v),
+                  static_cast<double>(chi2.v));
       REQUIRE(cov.any);
       REQUIRE(corr.any);
       REQUIRE(chi2.any);

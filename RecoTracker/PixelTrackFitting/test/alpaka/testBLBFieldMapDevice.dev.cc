@@ -42,6 +42,7 @@
 #include "RecoTracker/PixelTrackFitting/interface/alpaka/BrokenLine.h"
 #include "RecoTracker/PixelTrackFitting/interface/alpaka/GeneralBrokenLine.h"
 #include "RecoTracker/PixelTrackFitting/test/gblTestFixtures.h"
+#include "Utilities/Cadna/interface/CadnaEigenTypes.h"
 
 using namespace ALPAKA_ACCELERATOR_NAMESPACE;
 namespace blh = ::brokenline;
@@ -70,7 +71,7 @@ namespace {
 
   struct FieldKernel {
     ALPAKA_FN_ACC void operator()(
-        Acc1D const& acc, float const* map, double const* pts, double* out, int nPts, double tlca) const {
+        Acc1D const& acc, float const* map, double_st const* pts, double_st* out, int nPts, double tlca) const {
       for (auto i : cms::alpakatools::uniform_elements(acc, nPts)) {
         const double r = pts[2 * int(i)], z = pts[2 * int(i) + 1];
         double br = 0.;
@@ -87,18 +88,18 @@ namespace {
 
   struct WiringKernel {
     ALPAKA_FN_ACC void operator()(Acc1D const& acc,
-                                  double const* hitsIn,
-                                  float const* geIn,
-                                  double const* ffIn,
+                                  double_st const* hitsIn,
+                                  float_st const* geIn,
+                                  double_st const* ffIn,
                                   float const* rho,
                                   float const* bMap,
                                   double bField,
                                   gbld::GblNodeData* nodes,
-                                  double* scratch,
-                                  double* out) const {
+                                  double_st* scratch,
+                                  double_st* out) const {
       for (auto v : cms::alpakatools::uniform_elements(acc, 2)) {
-        Eigen::Matrix<double, 3, kNf> hits;
-        Eigen::Matrix<float, 6, kNf> hits_ge;
+        Eigen::Matrix<double_st, 3, kNf> hits;
+        Eigen::Matrix<float_st, 6, kNf> hits_ge;
         for (int c = 0; c < kNf; ++c) {
           for (int r = 0; r < 3; ++r)
             hits(r, c) = hitsIn[3 * c + r];
@@ -107,10 +108,10 @@ namespace {
         }
         const Eigen::Vector4d ff(ffIn[0], ffIn[1], ffIn[2], ffIn[3]);
         bld::PreparedGblData<kNf> data;
-        double gapD1[kNf], gapW1[kNf];
+        double_st gapD1[kNf], gapW1[kNf];
         bld::prepareGblFitData(acc, hits, ff, bField, rho, data, /*matCached=*/nullptr, gapD1, gapW1);
-        const double rHit0 = alpaka::math::sqrt(acc, hits(0, 0) * hits(0, 0) + hits(1, 0) * hits(1, 0));
-        double innerD1 = 0., innerW1 = 0.;
+        const double_st rHit0 = alpaka::math::sqrt(acc, hits(0, 0) * hits(0, 0) + hits(1, 0) * hits(1, 0));
+        double_st innerD1 = 0., innerW1 = 0.;
         if (data.innerXX0 > 0.)
           bld::segmentXX0GapSplit(acc, rho, 0., 0., rHit0, hits(2, 0), innerD1, innerW1);
 
@@ -138,10 +139,10 @@ namespace {
                                                               /*scatteringLogAtTotal=*/false,
                                                               /*elossCumulative=*/false);
         gbld::Vector5d corr = gbld::Vector5d::Zero();
-        double chi2 = 0.;
+        double_st chi2 = 0.;
         const auto cov = gbld::gblFitPca<Acc1D, 2 * kNf>(
             acc, myNodes, scratch + int(v) * gbld::kGblScratchDoubles<2 * kNf>, &corr, nullptr, &chi2);
-        double* o = out + int(v) * 32;
+        double_st* o = out + int(v) * 32;
         o[0] = ok ? 1. : 0.;
         for (int a = 0; a < 5; ++a) {
           o[1 + a] = corr(a);
@@ -164,25 +165,25 @@ TEST_CASE("blBFieldMap on the device for the " EDM_STRINGIZE(ALPAKA_ACCELERATOR_
   using blBFieldMap::kNR;
   using blBFieldMap::kNValues;
   using blBFieldMap::kNZ;
-  const double dr = double(blBFieldMap::kRMax) / double(kNR - 1);
-  const double dz = 2. * double(blBFieldMap::kZMax) / double(kNZ - 1);
+  const double_st dr = static_cast<double_st>(blBFieldMap::kRMax) / static_cast<double_st>(kNR - 1);
+  const double_st dz = 2. * static_cast<double_st>(blBFieldMap::kZMax) / static_cast<double_st>(kNZ - 1);
 
   // the synthetic lattice
   std::vector<float> mapHost(kNValues);
   for (int ir = 0; ir < kNR; ++ir)
     for (int iz = 0; iz < kNZ; ++iz) {
-      const double r = ir * dr, z = -double(blBFieldMap::kZMax) + iz * dz;
+      const double_st r = ir * dr, z = -static_cast<double_st>(blBFieldMap::kZMax) + iz * dz;
       mapHost[ir * kNZ + iz] = float(bzAnalytic(r, z));
       mapHost[kNNodes + ir * kNZ + iz] = float(brAnalytic(r, z));
     }
 
   // query points: every lattice node, every cell centre, and four out-of-box probes
-  std::vector<double> pts;
+  std::vector<double_st> pts;
   std::vector<int> nodeIr, nodeIz;  // lattice-node bookkeeping for assertion 1
   for (int ir = 0; ir < kNR; ++ir)
     for (int iz = 0; iz < kNZ; ++iz) {
       pts.push_back(ir * dr);
-      pts.push_back(-double(blBFieldMap::kZMax) + iz * dz);
+      pts.push_back(-static_cast<double_st>(blBFieldMap::kZMax) + iz * dz);
       nodeIr.push_back(ir);
       nodeIz.push_back(iz);
     }
@@ -190,12 +191,12 @@ TEST_CASE("blBFieldMap on the device for the " EDM_STRINGIZE(ALPAKA_ACCELERATOR_
   for (int ir = 0; ir + 1 < kNR; ++ir)
     for (int iz = 0; iz + 1 < kNZ; ++iz) {
       pts.push_back((ir + 0.5) * dr);
-      pts.push_back(-double(blBFieldMap::kZMax) + (iz + 0.5) * dz);
+      pts.push_back(-static_cast<double_st>(blBFieldMap::kZMax) + (iz + 0.5) * dz);
     }
   const int nCentres = (kNR - 1) * (kNZ - 1);
-  const double rMax = double(blBFieldMap::kRMax), zMax = double(blBFieldMap::kZMax);
-  const double clampProbes[4][2] = {{2. * rMax, 0.}, {-5., 0.}, {10., 3. * zMax}, {10., -3. * zMax}};
-  const double clampRefs[4][2] = {{rMax, 0.}, {0., 0.}, {10., zMax}, {10., -zMax}};
+  const double_st rMax = static_cast<double_st>(blBFieldMap::kRMax), zMax = static_cast<double_st>(blBFieldMap::kZMax);
+  const double_st clampProbes[4][2] = {{2. * rMax, 0.}, {-5., 0.}, {10., 3. * zMax}, {10., -3. * zMax}};
+  const double_st clampRefs[4][2] = {{rMax, 0.}, {0., 0.}, {10., zMax}, {10., -zMax}};
   for (int i = 0; i < 4; ++i) {
     pts.push_back(clampProbes[i][0]);
     pts.push_back(clampProbes[i][1]);
@@ -208,8 +209,8 @@ TEST_CASE("blBFieldMap on the device for the " EDM_STRINGIZE(ALPAKA_ACCELERATOR_
   const int iClamp = nNodesPts + nCentres;
 
   // the forward fixture, for the wiring check
-  Eigen::Matrix<double, 3, kNf> fhits;
-  Eigen::Matrix<float, 6, kNf> fge = Eigen::Matrix<float, 6, kNf>::Zero();
+  Eigen::Matrix<double_st, 3, kNf> fhits;
+  Eigen::Matrix<float_st, 6, kNf> fge = Eigen::Matrix<float_st, 6, kNf>::Zero();
   for (int k = 0; k < kNf; ++k) {
     fhits(0, k) = gblTestFixtures::FWD[k][0];
     fhits(1, k) = gblTestFixtures::FWD[k][1];
@@ -230,12 +231,12 @@ TEST_CASE("blBFieldMap on the device for the " EDM_STRINGIZE(ALPAKA_ACCELERATOR_
 
     auto map_h = cms::alpakatools::make_host_buffer<float[], Platform>(kNValues);
     std::copy_n(mapHost.data(), kNValues, map_h.data());
-    auto pts_h = cms::alpakatools::make_host_buffer<double[], Platform>(2 * nPts);
+    auto pts_h = cms::alpakatools::make_host_buffer<double_st[], Platform>(2 * nPts);
     std::copy_n(pts.data(), 2 * nPts, pts_h.data());
     auto map_d = cms::alpakatools::make_device_buffer<float[]>(queue, kNValues);
-    auto pts_d = cms::alpakatools::make_device_buffer<double[]>(queue, 2 * nPts);
-    auto fout_d = cms::alpakatools::make_device_buffer<double[]>(queue, 3 * nPts);
-    auto fout_h = cms::alpakatools::make_host_buffer<double[], Platform>(3 * nPts);
+    auto pts_d = cms::alpakatools::make_device_buffer<double_st[]>(queue, 2 * nPts);
+    auto fout_d = cms::alpakatools::make_device_buffer<double_st[]>(queue, 3 * nPts);
+    auto fout_h = cms::alpakatools::make_host_buffer<double_st[], Platform>(3 * nPts);
     alpaka::memcpy(queue, map_d, map_h);
     alpaka::memcpy(queue, pts_d, pts_h);
     // nPts is a few thousand, more than one block can hold, so grid-stride it
@@ -253,49 +254,49 @@ TEST_CASE("blBFieldMap on the device for the " EDM_STRINGIZE(ALPAKA_ACCELERATOR_
     alpaka::wait(queue);
 
     // 1. lattice nodes: exactly the two stored floats combined by the bending law.
-    double worstNode = 0.;
+    double_st worstNode = 0.;
     for (int i = 0; i < nNodesPts; ++i) {
-      const double bz = double(mapHost[nodeIr[i] * kNZ + nodeIz[i]]);
-      const double br = double(mapHost[kNNodes + nodeIr[i] * kNZ + nodeIz[i]]);
-      const double want = bz - br * kTlca;
-      worstNode = std::max(worstNode, std::abs(fout_h[3 * i] - want) / std::max(1e-30, std::abs(want)));
+      const double_st bz = static_cast<double_st>(mapHost[nodeIr[i] * kNZ + nodeIz[i]]);
+      const double_st br = static_cast<double_st>(mapHost[kNNodes + nodeIr[i] * kNZ + nodeIz[i]]);
+      const double_st want = bz - br * kTlca;
+      worstNode = std::max(worstNode, abs(fout_h[3 * i] - want) / fmax(1e-30, abs(want)));
     }
 
     // 2. device == host for the same constexpr function, and 5. the two entry points stay in sync.
-    double worstHost = 0., worstSync = 0.;
+    double_st worstHost = 0., worstSync = 0.;
     for (int i = 0; i < nPts; ++i) {
-      const double r = pts[2 * i], z = pts[2 * i + 1];
-      const double hostVal = blBFieldMap::bBendAt(mapHost.data(), r, z, kTlca);
-      worstHost = std::max(worstHost, std::abs(fout_h[3 * i] - hostVal) / std::max(1e-30, std::abs(hostVal)));
-      const double pureBz = blBFieldMap::bBendAt(mapHost.data(), r, z, 0.);
-      const double rebuilt = fout_h[3 * i + 1] + fout_h[3 * i + 2] * kTlca;
-      worstSync = std::max(worstSync, std::abs(rebuilt - pureBz) / std::max(1e-30, std::abs(pureBz)));
+      const double_st r = pts[2 * i], z = pts[2 * i + 1];
+      const double_st hostVal = blBFieldMap::bBendAt(mapHost.data(), r, z, kTlca);
+      worstHost = std::max(worstHost, abs(fout_h[3 * i] - hostVal) / fmax(1e-30, abs(hostVal)));
+      const double_st pureBz = blBFieldMap::bBendAt(mapHost.data(), r, z, 0.);
+      const double_st rebuilt = fout_h[3 * i + 1] + fout_h[3 * i + 2] * kTlca;
+      worstSync = std::max(worstSync, abs(rebuilt - pureBz) / fmax(1e-30, abs(pureBz)));
     }
 
     // 3. cell centres vs the continuous profile.
-    double worstBilinear = 0.;
+    double_st worstBilinear = 0.;
     for (int c = 0; c < nCentres; ++c) {
       const int i = nNodesPts + c;
-      const double r = pts[2 * i], z = pts[2 * i + 1];
-      const double want = bzAnalytic(r, z) - brAnalytic(r, z) * kTlca;
-      worstBilinear = std::max(worstBilinear, std::abs(fout_h[3 * i] - want));
+      const double_st r = pts[2 * i], z = pts[2 * i + 1];
+      const double_st want = bzAnalytic(r, z) - brAnalytic(r, z) * kTlca;
+      worstBilinear = std::max(worstBilinear, abs(fout_h[3 * i] - want));
     }
 
     // 4. clamping.
-    double worstClamp = 0.;
+    double_st worstClamp = 0.;
     for (int i = 0; i < 4; ++i)
-      worstClamp = std::max(worstClamp, std::abs(fout_h[3 * (iClamp + i)] - fout_h[3 * (iClamp + 4 + i)]));
+      worstClamp = std::max(worstClamp, abs(fout_h[3 * (iClamp + i)] - fout_h[3 * (iClamp + 4 + i)]));
 
     std::printf(
         "\n=== %s : blBFieldMap synthetic lattice (%d nodes, %d centres) ===\n", dn.c_str(), nNodesPts, nCentres);
     std::printf(
         "  node exactness=%.2e  device-vs-host=%.2e  bBendAndBrAt sync=%.2e  bilinear-vs-analytic=%.2e  "
         "clamp=%.2e\n",
-        worstNode,
-        worstHost,
-        worstSync,
-        worstBilinear,
-        worstClamp);
+        static_cast<double>(worstNode),
+        static_cast<double>(worstHost),
+        static_cast<double>(worstSync),
+        static_cast<double>(worstBilinear),
+        static_cast<double>(worstClamp));
     REQUIRE(worstNode < kTolExact);
     REQUIRE(worstHost < kTolExact);
     REQUIRE(worstSync < kTolExact);
@@ -304,9 +305,9 @@ TEST_CASE("blBFieldMap on the device for the " EDM_STRINGIZE(ALPAKA_ACCELERATOR_
 
     // 6. wiring: the node builder must see the map
     auto rho_d = cms::alpakatools::make_device_buffer<float[]>(queue, blMaterialMap::kSize);
-    auto fh_h = cms::alpakatools::make_host_buffer<double[], Platform>(3 * kNf);
-    auto fg_h = cms::alpakatools::make_host_buffer<float[], Platform>(6 * kNf);
-    auto fq_h = cms::alpakatools::make_host_buffer<double[], Platform>(4);
+    auto fh_h = cms::alpakatools::make_host_buffer<double_st[], Platform>(3 * kNf);
+    auto fg_h = cms::alpakatools::make_host_buffer<float_st[], Platform>(6 * kNf);
+    auto fq_h = cms::alpakatools::make_host_buffer<double_st[], Platform>(4);
     for (int c = 0; c < kNf; ++c) {
       for (int r = 0; r < 3; ++r)
         fh_h[3 * c + r] = fhits(r, c);
@@ -315,13 +316,13 @@ TEST_CASE("blBFieldMap on the device for the " EDM_STRINGIZE(ALPAKA_ACCELERATOR_
     }
     for (int j = 0; j < 4; ++j)
       fq_h[j] = fff(j);
-    auto fh_d = cms::alpakatools::make_device_buffer<double[]>(queue, 3 * kNf);
-    auto fg_d = cms::alpakatools::make_device_buffer<float[]>(queue, 6 * kNf);
-    auto fq_d = cms::alpakatools::make_device_buffer<double[]>(queue, 4);
+    auto fh_d = cms::alpakatools::make_device_buffer<double_st[]>(queue, 3 * kNf);
+    auto fg_d = cms::alpakatools::make_device_buffer<float_st[]>(queue, 6 * kNf);
+    auto fq_d = cms::alpakatools::make_device_buffer<double_st[]>(queue, 4);
     auto wn_d = cms::alpakatools::make_device_buffer<gbld::GblNodeData[]>(queue, 2 * kNodesF);
-    auto ws_d = cms::alpakatools::make_device_buffer<double[]>(queue, 2 * gbld::kGblScratchDoubles<2 * kNf>);
-    auto wo_d = cms::alpakatools::make_device_buffer<double[]>(queue, 2 * 32);
-    auto wo_h = cms::alpakatools::make_host_buffer<double[], Platform>(2 * 32);
+    auto ws_d = cms::alpakatools::make_device_buffer<double_st[]>(queue, 2 * gbld::kGblScratchDoubles<2 * kNf>);
+    auto wo_d = cms::alpakatools::make_device_buffer<double_st[]>(queue, 2 * 32);
+    auto wo_h = cms::alpakatools::make_host_buffer<double_st[], Platform>(2 * 32);
     alpaka::memcpy(queue, rho_d, rho_h);
     alpaka::memcpy(queue, fh_d, fh_h);
     alpaka::memcpy(queue, fg_d, fg_h);
@@ -344,17 +345,17 @@ TEST_CASE("blBFieldMap on the device for the " EDM_STRINGIZE(ALPAKA_ACCELERATOR_
 
     REQUIRE(wo_h[0] > 0.5);   // the split layout was built without the map
     REQUIRE(wo_h[32] > 0.5);  // and with it
-    double maxCorrRel = 0.;
+    double_st maxCorrRel = 0.;
     for (int a = 0; a < 5; ++a) {
-      const double ref = wo_h[1 + a];
-      if (std::abs(ref) > 1e-30)
-        maxCorrRel = std::max(maxCorrRel, std::abs(wo_h[32 + 1 + a] - ref) / std::abs(ref));
+      const double_st ref = wo_h[1 + a];
+      if (abs(ref) > 1e-30)
+        maxCorrRel = std::max(maxCorrRel, abs(wo_h[32 + 1 + a] - ref) / abs(ref));
     }
     std::printf(
         "  wiring (FWD fixture): max relative change of the corrections with the map = %.3e  chi2 %.6g -> %.6g\n",
-        maxCorrRel,
-        wo_h[11],
-        wo_h[32 + 11]);
+        static_cast<double>(maxCorrRel),
+        static_cast<double>(wo_h[11]),
+        static_cast<double>(wo_h[32 + 11]));
     // only that the map reaches the node builder; the size of the shift is a physics number
     REQUIRE(maxCorrRel > 1e-9);
   }

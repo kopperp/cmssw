@@ -10,11 +10,14 @@
 
 #include "HeterogeneousCore/AlpakaInterface/interface/config.h"
 
+#include "Utilities/Cadna/interface/CadnaEigenTypes.h"
+
 namespace ALPAKA_ACCELERATOR_NAMESPACE::curvilinearToPerigee {
 
-  using Matrix5d = Eigen::Matrix<double, 5, 5>;
-  using Vector5d = Eigen::Matrix<double, 5, 1>;
-  using Vector3d = Eigen::Vector3d;
+  using Matrix5d = Eigen::Matrix<double_st, 5, 5>;
+  using Vector5d = Eigen::Matrix<double_st, 5, 1>;
+  // using Vector3d = Eigen::Vector3d;
+  using Vector3d = Eigen::Vector<double_st, 3>;
 
   constexpr double kPi = 3.14159265358979323846;  // M_PI may be undefined in device compilation
 
@@ -37,24 +40,24 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::curvilinearToPerigee {
   // referencePoint = origin). charge = track charge; bz = field z-component in inverse-GeV (= B[T]*2.99792458e-3).
   template <typename TAcc>
   ALPAKA_FN_ACC ALPAKA_FN_INLINE Vector5d
-  perigeeParameters(const TAcc& acc, const Vector3d& pos, const Vector3d& mom, int charge, double bz) {
-    const double pt = alpaka::math::sqrt(acc, mom.x() * mom.x() + mom.y() * mom.y());
-    const double theta = alpaka::math::atan2(acc, pt, mom.z());
-    const double phi = alpaka::math::atan2(acc, mom.y(), mom.x());
+  perigeeParameters(const TAcc& acc, const Vector3d& pos, const Vector3d& mom, int charge, double_st bz) {
+    const double_st pt = alpaka::math::sqrt(acc, mom.x() * mom.x() + mom.y() * mom.y());
+    const double_st theta = alpaka::math::atan2(acc, pt, mom.z());
+    const double_st phi = alpaka::math::atan2(acc, mom.y(), mom.x());
 
     // signed transverse impact parameter (epsilon): sign from momentum-phi vs position-phi, magnitude = |xy| distance.
-    const double positiveMomentumPhi = (phi > 0.) ? phi : (2. * kPi + phi);
-    const double positionPhi = alpaka::math::atan2(acc, pos.y(), pos.x());
-    const double positivePositionPhi = (positionPhi > 0.) ? positionPhi : (2. * kPi + positionPhi);
-    double phiDiff = positiveMomentumPhi - positivePositionPhi;
+    const double_st positiveMomentumPhi = (phi > 0.) ? phi : (2. * kPi + phi);
+    const double_st positionPhi = alpaka::math::atan2(acc, pos.y(), pos.x());
+    const double_st positivePositionPhi = (positionPhi > 0.) ? positionPhi : (2. * kPi + positionPhi);
+    double_st phiDiff = positiveMomentumPhi - positivePositionPhi;
     if (phiDiff < 0.)
       phiDiff += 2. * kPi;
-    const double signEpsilon = (phiDiff > kPi) ? -1.0 : 1.0;
-    const double epsilon = signEpsilon * alpaka::math::sqrt(acc, pos.x() * pos.x() + pos.y() * pos.y());
+    const double_st signEpsilon = (phiDiff > kPi) ? -1.0 : 1.0;
+    const double_st epsilon = signEpsilon * alpaka::math::sqrt(acc, pos.x() * pos.x() + pos.y() * pos.y());
 
-    const double signTC = -double(charge);
+    const double_st signTC = -double(charge);
     const bool isCharged = (signTC != 0.) && (alpaka::math::abs(acc, bz) > 1.e-10);
-    const double kappa = isCharged ? (bz / pt * signTC) : (1. / pt);
+    const double_st kappa = isCharged ? (bz / pt * signTC) : (1. / pt);
 
     Vector5d p;
     p << kappa, theta, phi, epsilon, pos.z();
@@ -80,25 +83,25 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::curvilinearToPerigee {
     const Vector3d H = normalize3(acc, bfield);
     const Vector3d HxT = cross3(H, T);
     const Vector3d N = normalize3(acc, HxT);
-    const double alpha = norm3(acc, HxT);
-    const double pmag = norm3(acc, mom);
-    const double qbp = double(charge) / pmag;
-    const double Q = -norm3(acc, bfield) * qbp;
-    const double alphaQ = alpha * Q;
+    const double_st alpha = norm3(acc, HxT);
+    const double_st pmag = norm3(acc, mom);
+    const double_st qbp = double(charge) / pmag;
+    const double_st Q = -norm3(acc, bfield) * qbp;
+    const double_st alphaQ = alpha * Q;
 
-    const double pt = alpaka::math::sqrt(acc, mom.x() * mom.x() + mom.y() * mom.y());
-    const double lambda = 0.5 * kPi - alpaka::math::atan2(acc, pt, mom.z());
-    const double coslambda = alpaka::math::cos(acc, lambda), sinlambda = alpaka::math::sin(acc, lambda);
-    const double seclambda = 1. / coslambda;
+    const double_st pt = alpaka::math::sqrt(acc, mom.x() * mom.x() + mom.y() * mom.y());
+    const double_st lambda = 0.5 * kPi - alpaka::math::atan2(acc, pt, mom.z());
+    const double_st coslambda = alpaka::math::cos(acc, lambda), sinlambda = alpaka::math::sin(acc, lambda);
+    const double_st seclambda = 1. / coslambda;
 
-    const double ITI = 1. / dot3(T, I);
-    const double NU = dot3(N, U), NV = dot3(N, V);
-    const double UI = dot3(U, I), VI = dot3(V, I);
-    const double UJ = dot3(U, J), VJ = dot3(V, J);
-    const double UK = dot3(U, K), VK = dot3(V, K);
+    const double_st ITI = 1. / dot3(T, I);
+    const double_st NU = dot3(N, U), NV = dot3(N, V);
+    const double_st UI = dot3(U, I), VI = dot3(V, I);
+    const double_st UJ = dot3(U, J), VJ = dot3(V, J);
+    const double_st UK = dot3(U, K), VK = dot3(V, K);
 
     // transverse curvature kappa = field/pt*signTC; here we use the same signed transverse curvature CMSSW does.
-    const double transverseCurvature = -bfield.z() * seclambda * qbp;  // = field/pt*(-charge) up to sign bookkeeping
+    const double_st transverseCurvature = -bfield.z() * seclambda * qbp;  // = field/pt*(-charge) up to sign bookkeeping
 
     Matrix5d jac = Matrix5d::Zero();
     if (alpaka::math::abs(acc, transverseCurvature) < 1.e-10) {

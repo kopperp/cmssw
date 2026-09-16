@@ -36,6 +36,7 @@
 #include "HeterogeneousCore/AlpakaInterface/interface/config.h"
 #include "HeterogeneousCore/AlpakaInterface/interface/memory.h"
 #include "HeterogeneousCore/AlpakaInterface/interface/workdivision.h"
+#include "Utilities/Cadna/interface/CadnaEigenTypes.h"
 
 #include "RecoTracker/PixelTrackFitting/interface/BLMaterialMap.h"
 #include "RecoTracker/PixelTrackFitting/interface/BrokenLine.h"                // upstream host fastFit
@@ -114,35 +115,35 @@ namespace {
   template <int N>
   struct OracleKernel {
     ALPAKA_FN_ACC void operator()(Acc1D const& acc,
-                                  double const* hitsIn,
-                                  float const* geIn,
-                                  double const* ffIn,
+                                  double_st const* hitsIn,
+                                  float_st const* geIn,
+                                  double_st const* ffIn,
                                   float const* rho,
                                   double bField,
-                                  double msScale,
+                                  double_st msScale,
                                   gbld::GblNodeData* nodes,
-                                  double* scratch,
-                                  double* out) const {
+                                  double_st* scratch,
+                                  double_st* out) const {
       using O = Out<N>;
       for ([[maybe_unused]] auto lane : cms::alpakatools::uniform_elements(acc, 1)) {
-        Eigen::Matrix<double, 3, N> hits;
-        Eigen::Matrix<float, 6, N> hits_ge;
+        Eigen::Matrix<double_st, 3, N> hits;
+        Eigen::Matrix<float_st, 6, N> hits_ge;
         for (int c = 0; c < N; ++c) {
           for (int r = 0; r < 3; ++r)
             hits(r, c) = hitsIn[3 * c + r];
           for (int r = 0; r < 6; ++r)
             hits_ge(r, c) = geIn[6 * c + r];
         }
-        const Eigen::Vector4d ff(ffIn[0], ffIn[1], ffIn[2], ffIn[3]);
+        const Eigen::Vector<double_st, 4> ff(ffIn[0], ffIn[1], ffIn[2], ffIn[3]);
 
         // (i) prep: arc lengths, charge, the Geant4 material march and every gap's two-thin split.
         bld::PreparedGblData<N> data;
-        double gapD1[N], gapW1[N];
+        double_st gapD1[N], gapW1[N];
         bld::prepareGblFitData(acc, hits, ff, bField, rho, data, /*matCached=*/nullptr, gapD1, gapW1);
 
         // the upstream (beamline -> hit0) segment's own split, as BrokenLineFitKernels.h:627 takes it.
-        const double rHit0 = alpaka::math::sqrt(acc, hits(0, 0) * hits(0, 0) + hits(1, 0) * hits(1, 0));
-        double innerD1 = 0., innerW1 = 0.;
+        const double_st rHit0 = alpaka::math::sqrt(acc, hits(0, 0) * hits(0, 0) + hits(1, 0) * hits(1, 0));
+        double_st innerD1 = 0., innerW1 = 0.;
         if (data.innerXX0 > 0.)
           bld::segmentXX0GapSplit(acc, rho, 0., 0., rHit0, hits(2, 0), innerD1, innerW1);
 
@@ -196,7 +197,7 @@ namespace {
         // (iii) solve at the PCA. gblFitPca<M> spans M+1 nodes, so M = nNodes - 1 in both layouts.
         gbld::Vector5d corr = gbld::Vector5d::Zero();
         gbld::Matrix5d cov = gbld::Matrix5d::Zero();
-        double chi2 = 0.;
+        double_st chi2 = 0.;
         int nNodes = 0;
         if (usedSplit) {
           nNodes = 2 * N + 1;
@@ -210,11 +211,11 @@ namespace {
         gbld::Vector5d helixPar = gbld::Vector5d::Zero();
         gbld::Matrix5d helixCov = gbld::Matrix5d::Zero();
         gbld::gblHelixAtPca(
-            acc, ff, data.qCharge, bField, double(data.sTransverse(0)), hits(2, 0), corr, cov, helixPar, helixCov);
+            acc, ff, data.qCharge, bField, static_cast<double_st>(data.sTransverse(0)), hits(2, 0), corr, cov, helixPar, helixCov);
 
         out[O::kUsedSplit] = usedSplit ? 1. : 0.;
-        out[O::kNNodes] = double(nNodes);
-        out[O::kQCharge] = double(data.qCharge);
+        out[O::kNNodes] = static_cast<double_st>(nNodes);
+        out[O::kQCharge] = static_cast<double_st>(data.qCharge);
         out[O::kInnerXX0] = data.innerXX0;
         out[O::kInnerD1] = innerD1;
         out[O::kInnerW1] = innerW1;
@@ -242,57 +243,57 @@ namespace {
 
   //!< max relative difference, skipping entries whose reference is numerically zero.
   struct MaxRel {
-    double v = 0.;
+    double_st v = 0.;
     bool any = false;  // positive control: did anything at all clear the zero guard?
-    void add(double got, double ref) { addScaled(got, ref, std::abs(ref)); }
+    void add(double_st got, double_st ref) { addScaled(got, ref ,abs(ref)); }
     //!< Relative comparison of one entry, gated on that entry being a real part of its object: an entry far
     //!< below the object's own scale carries an absolute error of order eps*scale like every other entry, so
     //!< dividing it by itself reports a huge relative error that measures only the entry's smallness. This
     //!< is the kCovGate the DESY comparison below applies, for the same reason.
-    void addScaled(double got, double ref, double scale) {
-      if (std::abs(ref) > 1e-30 && std::abs(ref) > kCovGate * scale) {
+    void addScaled(double_st got, double_st ref, double_st scale) {
+      if (abs(ref) > 1e-30 && abs(ref) > kCovGate * scale) {
         any = true;
-        v = std::max(v, std::abs(got - ref) / std::abs(ref));
+        v = std::max(v, abs(got - ref) / abs(ref));
       }
     }
   };
 
   //!< measurement-only Cramer-Rao floors: d0 (straight line), 1/R (3-param circle Fisher), z0.
   template <int N>
-  void cramerRao(const Eigen::Matrix<double, 3, N>& hits,
-                 const Eigen::Matrix<float, 6, N>& hits_ge,
-                 double& crD0,
-                 double& crKappa,
-                 double& crZ0) {
+  void cramerRao(const Eigen::Matrix<double_st, 3, N>& hits,
+                 const Eigen::Matrix<float_st, 6, N>& hits_ge,
+                 double_st& crD0,
+                 double_st& crKappa,
+                 double_st& crZ0) {
     crD0 = crKappa = crZ0 = 0.;
-    const double phi = std::atan2(hits(1, N - 1) - hits(1, 0), hits(0, N - 1) - hits(0, 0));
-    const double cph = std::cos(phi), sph = std::sin(phi);
-    double sW = 0., sWu = 0., sWuu = 0., sWz = 0., sWzs = 0., sWzss = 0.;
-    Eigen::Matrix3d fisher = Eigen::Matrix3d::Zero();
+    const double_st phi = atan2(hits(1, N - 1) - hits(1, 0), hits(0, N - 1) - hits(0, 0));
+    const double_st cph = cos(phi), sph = sin(phi);
+    double_st sW = 0., sWu = 0., sWuu = 0., sWz = 0., sWzs = 0., sWzss = 0.;
+    Eigen::Matrix<double_st, 3, 3> fisher = Eigen::Matrix<double_st, 3, 3>::Zero();
     for (int i = 0; i < N; ++i) {
-      const double xx = hits_ge(0, i), xy = hits_ge(1, i), yy = hits_ge(2, i);
-      const double u = hits(0, i) * cph + hits(1, i) * sph;
-      const double sv2 = sph * sph * xx - 2. * sph * cph * xy + cph * cph * yy;
-      const double w = (sv2 > 0.) ? 1. / sv2 : 0.;
+      const double_st xx = static_cast<double_st>(hits_ge(0, i)), xy = static_cast<double_st>(hits_ge(1, i)), yy = static_cast<double_st>(hits_ge(2, i));
+      const double_st u = hits(0, i) * cph + hits(1, i) * sph;
+      const double_st sv2 = sph * sph * xx - 2. * sph * cph * xy + cph * cph * yy;
+      const double_st w = (sv2 > 0.) ? 1. / sv2 : static_cast<double_st>(0.);
       sW += w;
       sWu += w * u;
       sWuu += w * u * u;
-      const Eigen::Vector3d g(u, 1., 0.5 * u * u);
+      const Eigen::Vector<double_st, 3> g(u, 1., 0.5 * u * u);
       fisher += w * g * g.transpose();
-      const double zz = hits_ge(5, i);
-      const double wz = (zz > 0.) ? 1. / zz : 0.;
+      const double_st zz = static_cast<double_st>(hits_ge(5, i));
+      const double_st wz = (zz > 0.) ? 1. / zz : static_cast<double_st>(0.);
       sWz += wz;
       sWzs += wz * u;
       sWzss += wz * u * u;
     }
-    const double dd = sW * sWuu - sWu * sWu;
+    const double_st dd = sW * sWuu - sWu * sWu;
     if (dd > 0.)
-      crD0 = std::sqrt(sWuu / dd);
-    if (std::abs(fisher.determinant()) > 0.)
-      crKappa = std::sqrt(fisher.inverse()(2, 2));
-    const double dz = sWz * sWzss - sWzs * sWzs;
+      crD0 = sqrt(sWuu / dd);
+    if (abs(fisher.determinant()) > 0.)
+      crKappa = sqrt(fisher.inverse()(2, 2));
+    const double_st dz = sWz * sWzss - sWzs * sWzs;
     if (dz > 0.)
-      crZ0 = std::sqrt(sWzss / dz);
+      crZ0 = sqrt(sWzss / dz);
   }
 
   // One fixture on one device.
@@ -301,9 +302,9 @@ namespace {
                   const char* devName,
                   const char* label,
                   const double D[N][9],
-                  double msScale,
-                  double tolTwin,
-                  double tolDesy,
+                  double_st msScale,
+                  double_st tolTwin,
+                  double_st tolDesy,
                   const float* rhoDev) {
     using O = Out<N>;
     constexpr double kB = gblTestFixtures::kB;
@@ -311,23 +312,23 @@ namespace {
     // hits + the 3x3 global covariance. Where a fixture has no dumped longitudinal error (gzz == 0) a
     // nominal sigma_z = 1 cm is substituted so the longitudinal subsystem is non-singular; z0/cotTheta
     // are then meaningless for that fixture and only the transverse numbers carry physics.
-    Eigen::Matrix<double, 3, N> hits;
-    Eigen::Matrix<float, 6, N> hits_ge = Eigen::Matrix<float, 6, N>::Zero();
+    Eigen::Matrix<double_st, 3, N> hits;
+    Eigen::Matrix<float_st, 6, N> hits_ge = Eigen::Matrix<float_st, 6, N>::Zero();
     for (int k = 0; k < N; ++k) {
       hits(0, k) = D[k][0];
       hits(1, k) = D[k][1];
       hits(2, k) = D[k][2];
-      const double zz = (D[k][8] > 0.) ? D[k][8] : 1.0;
+      const double zz = (D[k][8] > 0.) ? D[k][8] : double(1.0);
       hits_ge.col(k) << D[k][3], D[k][4], D[k][5], D[k][6], D[k][7], zz;
     }
     // The reference helix is computed ON THE HOST and uploaded, so every backend linearizes around bitwise
     // the same reference and the comparison below isolates the fit, not the seed.
-    Eigen::Vector4d ff;
+    Eigen::Vector<double_st, 4> ff;
     blh::fastFit(hits, ff);
 
-    auto hits_h = cms::alpakatools::make_host_buffer<double[], Platform>(3 * N);
-    auto ge_h = cms::alpakatools::make_host_buffer<float[], Platform>(6 * N);
-    auto ff_h = cms::alpakatools::make_host_buffer<double[], Platform>(4);
+    auto hits_h = cms::alpakatools::make_host_buffer<double_st[], Platform>(3 * N);
+    auto ge_h = cms::alpakatools::make_host_buffer<float_st[], Platform>(6 * N);
+    auto ff_h = cms::alpakatools::make_host_buffer<double_st[], Platform>(4);
     for (int c = 0; c < N; ++c) {
       for (int r = 0; r < 3; ++r)
         hits_h[3 * c + r] = hits(r, c);
@@ -337,14 +338,14 @@ namespace {
     for (int j = 0; j < 4; ++j)
       ff_h[j] = ff(j);
 
-    auto hits_d = cms::alpakatools::make_device_buffer<double[]>(queue, 3 * N);
-    auto ge_d = cms::alpakatools::make_device_buffer<float[]>(queue, 6 * N);
-    auto ff_d = cms::alpakatools::make_device_buffer<double[]>(queue, 4);
+    auto hits_d = cms::alpakatools::make_device_buffer<double_st[]>(queue, 3 * N);
+    auto ge_d = cms::alpakatools::make_device_buffer<float_st[]>(queue, 6 * N);
+    auto ff_d = cms::alpakatools::make_device_buffer<double_st[]>(queue, 4);
     auto nodes_d = cms::alpakatools::make_device_buffer<gbld::GblNodeData[]>(queue, O::kNodesMax);
-    auto scratch_d = cms::alpakatools::make_device_buffer<double[]>(queue, gbld::kGblScratchDoubles<2 * N>);
-    auto out_d = cms::alpakatools::make_device_buffer<double[]>(queue, O::kSize);
+    auto scratch_d = cms::alpakatools::make_device_buffer<double_st[]>(queue, gbld::kGblScratchDoubles<2 * N>);
+    auto out_d = cms::alpakatools::make_device_buffer<double_st[]>(queue, O::kSize);
     auto nodes_h = cms::alpakatools::make_host_buffer<gbld::GblNodeData[], Platform>(O::kNodesMax);
-    auto out_h = cms::alpakatools::make_host_buffer<double[], Platform>(O::kSize);
+    auto out_h = cms::alpakatools::make_host_buffer<double_st[], Platform>(O::kSize);
 
     alpaka::memcpy(queue, hits_d, hits_h);
     alpaka::memcpy(queue, ge_d, ge_h);
@@ -406,8 +407,8 @@ namespace {
     REQUIRE(nScat >= 1);
 
     gblh::Vector5d hostCorr;
-    Eigen::VectorXd hostFd;
-    double hostChi2 = 0.;
+    Eigen::Vector<double_st, Eigen::Dynamic> hostFd;
+    double_st hostChi2 = 0.;
     const gblh::Matrix5d hostCov = gblh::gblFitPca(hostNodes, &hostCorr, &hostFd, &hostChi2);
     gblh::Vector5d hostHp;
     gblh::Matrix5d hostHc;
@@ -415,13 +416,13 @@ namespace {
 
     // The scales each entry is gated against: a vector against its own largest entry, a covariance entry
     // against sqrt(Caa*Cbb), which makes the gate a statement about the correlation, not about the units.
-    double corrScaleT = 0., fdScaleT = 0., hpScaleT = 0.;
+    double_st corrScaleT = 0., fdScaleT = 0., hpScaleT = 0.;
     for (int a = 0; a < 5; ++a) {
-      corrScaleT = std::max(corrScaleT, std::abs(hostCorr(a)));
-      hpScaleT = std::max(hpScaleT, std::abs(hostHp(a)));
+      corrScaleT = std::max(corrScaleT, abs(hostCorr(a)));
+      hpScaleT = std::max(hpScaleT, abs(hostHp(a)));
     }
     for (int a = 0; a < 2 * nNodes + 1; ++a)
-      fdScaleT = std::max(fdScaleT, std::abs(hostFd(a)));
+      fdScaleT = std::max(fdScaleT, abs(hostFd(a)));
 
     MaxRel twinCov, twinCorr, twinFd, twinHp, twinHc, twinChi2;
     for (int a = 0; a < 5; ++a) {
@@ -429,9 +430,9 @@ namespace {
       twinHp.addScaled(out_h[O::kHelixPar + a], hostHp(a), hpScaleT);
       for (int b = 0; b < 5; ++b) {
         twinCov.addScaled(
-            out_h[O::kCov + a * 5 + b], hostCov(a, b), std::sqrt(std::abs(hostCov(a, a) * hostCov(b, b))));
+            out_h[O::kCov + a * 5 + b], hostCov(a, b), sqrt(abs(hostCov(a, a) * hostCov(b, b))));
         twinHc.addScaled(
-            out_h[O::kHelixCov + a * 5 + b], hostHc(a, b), std::sqrt(std::abs(hostHc(a, a) * hostHc(b, b))));
+            out_h[O::kHelixCov + a * 5 + b], hostHc(a, b), sqrt(abs(hostHc(a, a) * hostHc(b, b))));
       }
     }
     for (int a = 0; a < 2 * nNodes + 1; ++a)
@@ -443,61 +444,61 @@ namespace {
     REQUIRE(desy.ok);
 
     MaxRel desyCorr, desyChi2;
-    double desyCovMaxRel = 0., desyCovMaxAbs = 0.;
+    double_st desyCovMaxRel = 0., desyCovMaxAbs = 0.;
     bool desyCovAny = false;
-    double corrScale = 0.;
+    double_st corrScale = 0.;
     for (int a = 0; a < 5; ++a)
-      corrScale = std::max(corrScale, std::abs(desy.corr[a]));
+      corrScale = fmax(corrScale, abs(desy.corr[a]));
     for (int a = 0; a < 5; ++a) {
       if (std::abs(desy.corr[a]) > kCovGate * corrScale)
         desyCorr.add(out_h[O::kCorr + a], desy.corr[a]);
       for (int b = 0; b < 5; ++b) {
-        const double ref = desy.cov[a * 5 + b];
-        const double scale = std::sqrt(std::abs(desy.cov[a * 5 + a] * desy.cov[b * 5 + b]));
-        const double diff = std::abs(out_h[O::kCov + a * 5 + b] - ref);
-        desyCovMaxAbs = std::max(desyCovMaxAbs, diff);
-        if (std::abs(ref) > kCovGate * scale) {
+        const double_st ref = desy.cov[a * 5 + b];
+        const double_st scale = sqrt(abs(desy.cov[a * 5 + a] * desy.cov[b * 5 + b]));
+        const double_st diff = abs(out_h[O::kCov + a * 5 + b] - ref);
+        desyCovMaxAbs = fmax(desyCovMaxAbs, diff);
+        if (abs(ref) > kCovGate * scale) {
           desyCovAny = true;
-          desyCovMaxRel = std::max(desyCovMaxRel, diff / std::abs(ref));
+          desyCovMaxRel = fmax(desyCovMaxRel, diff / abs(ref));
         }
       }
     }
     desyChi2.add(out_h[O::kChi2], desy.chi2);
 
     // Physics diagnostics, printed and never asserted.
-    double crD0 = 0., crKappa = 0., crZ0 = 0.;
+    double_st crD0 = 0., crKappa = 0., crZ0 = 0.;
     cramerRao<N>(hits, hits_ge, crD0, crKappa, crZ0);
-    const double slope = -double(qCharge) / ff(3);
-    const double sec2 = 1. + slope * slope;
-    const double gblD0 = std::sqrt(std::abs(out_h[O::kCov + 3 * 5 + 3]));
-    const double gblZ0 = std::sqrt(std::abs(out_h[O::kCov + 4 * 5 + 4]));
-    const double gblKappa = kB * std::sqrt(std::abs(out_h[O::kCov])) * std::sqrt(sec2);
-    const double eta = std::asinh((hits(2, N - 1) - hits(2, 0)) /
-                                  (std::hypot(hits(0, N - 1), hits(1, N - 1)) - std::hypot(hits(0, 0), hits(1, 0))));
+    const double_st slope = -static_cast<double_st>(qCharge) / ff(3);
+    const double_st sec2 = 1. + slope * slope;
+    const double_st gblD0 = sqrt(abs(out_h[O::kCov + 3 * 5 + 3]));
+    const double_st gblZ0 = sqrt(abs(out_h[O::kCov + 4 * 5 + 4]));
+    const double_st gblKappa = kB * sqrt(abs(out_h[O::kCov])) * sqrt(sec2);
+    const double_st eta = asinh((hits(2, N - 1) - hits(2, 0)) /
+                                  (hypot(hits(0, N - 1), hits(1, N - 1)) - hypot(hits(0, 0), hits(1, 0))));
 
     std::printf(
         "  %-28s N=%2d pt=%6.1f eta=%+5.2f q=%+d %s nodes=%2d | twin cov=%.1e corr=%.1e fd=%.1e hp=%.1e hc=%.1e "
         "chi2=%.1e | DESY cov=%.1e corr=%.1e chi2=%.1e ndf=%d | GBLd0/CR=%.2f GBLk/CR=%.2f z0/CR=%.2f\n",
         label,
         N,
-        kB * ff(2),
-        eta,
+        static_cast<double>(kB * ff(2)),
+        static_cast<double>(eta),
         qCharge,
         usedSplit ? "split" : "arriv",
         nNodes,
-        twinCov.v,
-        twinCorr.v,
-        twinFd.v,
-        twinHp.v,
-        twinHc.v,
-        twinChi2.v,
-        desyCovMaxRel,
-        desyCorr.v,
-        desyChi2.v,
+        static_cast<double>(twinCov.v),
+        static_cast<double>(twinCorr.v),
+        static_cast<double>(twinFd.v),
+        static_cast<double>(twinHp.v),
+        static_cast<double>(twinHc.v),
+        static_cast<double>(twinChi2.v),
+        static_cast<double>(desyCovMaxRel),
+        static_cast<double>(desyCorr.v),
+        static_cast<double>(desyChi2.v),
         desy.ndf,
-        (crD0 > 0.) ? gblD0 / crD0 : 0.,
-        (crKappa > 0.) ? gblKappa / crKappa : 0.,
-        (crZ0 > 0.) ? gblZ0 / crZ0 : 0.);
+        static_cast<double>((crD0 > 0.) ? gblD0 / crD0 : static_cast<double_st>(0.)),
+        static_cast<double>((crKappa > 0.) ? gblKappa / crKappa : static_cast<double_st>(0.)),
+        static_cast<double>((crZ0 > 0.) ? gblZ0 / crZ0 : static_cast<double_st>(0.)));
 
     const gblHostOracles::PerigeeRatios pr = gblHostOracles::perigeeRatios(ff.data(),
                                                                            qCharge,
@@ -510,11 +511,11 @@ namespace {
                                                                            &out_h[O::kHelixCov]);
     if (pr.ok)
       std::printf("      [PERIGEE ours/CMSSW] d0=%.3f z0=%.3f phi=%.3f theta=%.3f pt/pt=%.3f   (%s)\n",
-                  pr.d0,
-                  pr.z0,
-                  pr.phi,
-                  pr.theta,
-                  pr.ptRel,
+                  static_cast<double>(pr.d0),
+                  static_cast<double>(pr.z0),
+                  static_cast<double>(pr.phi),
+                  static_cast<double>(pr.theta),
+                  static_cast<double>(pr.ptRel),
                   devName);
 
     // Positive controls first: a comparison whose reference is identically zero passes vacuously.
@@ -541,7 +542,7 @@ namespace {
 
     // The material march must have produced something: an all-zero matXX0 would make every scatterer
     // vanish and the fit degenerate into a measurement-only one that still agrees with both oracles.
-    double matSum = 0.;
+    double_st matSum = 0.;
     for (int i = 0; i < N; ++i)
       matSum += out_h[O::kMatXX0 + i];
     REQUIRE(matSum > 0.);
