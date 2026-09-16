@@ -9,6 +9,7 @@
 // trio in BrokenLineFit.dev.cc rather than a shared header: ~90 lines of pure bookkeeping (CSR offsets,
 // container init, radius sort). If they ever diverge the symptom is a wrong anchor node.
 #include <cstdlib>
+#include "Utilities/Cadna/interface/CadnaEigenTypes.h"
 
 #include "BrokenLineFitKernels.h"
 #include "CAExtensionKernels.h"
@@ -180,10 +181,10 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                                        const double bField,
                                                        ::reco::TrackSoAConstView tracks,
                                                        caStructures::tindex_type const* __restrict__ ptkids,
-                                                       double* __restrict__ phits,
-                                                       float* __restrict__ phits_ge,
-                                                       double* __restrict__ pfast_fit,
-                                                       double* __restrict__ pscratch,
+                                                       double_st* __restrict__ phits,
+                                                       float_st* __restrict__ phits_ge,
+                                                       double_st* __restrict__ pfast_fit,
+                                                       double_st* __restrict__ pscratch,
                                                        caExtension::ExtPredCoeff* __restrict__ out,
                                                        const float* __restrict__ rhoMap_,
                                                        const float* __restrict__ bMap_,
@@ -218,8 +219,8 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
     // Taken from the circle fit: the fit's kink variable is the TRANSVERSE-frame angle, and everything
     // the walk consumes downstream is in that same frame. The alternative -- a 3-D scattering angle
     // multiplied by the transverse arc -- mixes frames.
-    const double qCharge = data.qCharge;
-    const double slope = -qCharge / fast_fit(3);
+    const double_st qCharge = data.qCharge;
+    const double_st slope = -qCharge / fast_fit(3);
     data.varBeta *= 1. + riemannFit::sqr(slope);
 
     // As in the circle fit: the track-orthogonal projection of each hit's 2x2 xy error.
@@ -239,58 +240,58 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
     caExtension::ExtPredCoeff o{};
     o.valid = 0.f;
     const int ls = fitWs.laneStride;
-    double* const Mb = fitWs.bandMb;
-    double* const cbor = fitWs.bandCbor;
-    double* const wcol = fitWs.bandW;
-    double* const msc = fitWs.bandMs;
+    double_st* const Mb = fitWs.bandMb;
+    double_st* const cbor = fitWs.bandCbor;
+    double_st* const wcol = fitWs.bandW;
+    double_st* const msc = fitWs.bandMs;
     brokenline::matrixC_uBandLower(weightsVec, data.sTransverse, data.varBeta, Mb, ls);
     fitWs.bandCorner[0] = brokenline::circleBorderLower(data.sTransverse, data.varBeta, cbor, ls);
     generalBrokenLine::bandFactor<2>(Mb, n, ls);
     for (u_int i = 0; i < n; i++)
       wcol[i * ls] = cbor[i * ls];
     generalBrokenLine::bandSolveInPlace<2>(Mb, wcol, n, ls);
-    double schur = fitWs.bandCorner[0];
+    double_st schur = fitWs.bandCorner[0];
     for (u_int i = 0; i < n; i++)
       schur -= cbor[i * ls] * wcol[i * ls];
 
     if (schur > 0. && alpaka::math::isfinite(acc, schur)) {
       const u_int ia = n - 2;  // node n-2
       const u_int ib = n - 1;  // node n-1
-      const double invS = 1. / schur;
+      const double_st invS = 1. / schur;
       for (u_int i = 0; i < n; i++)
         msc[i * ls] = 0.;
       msc[ia * ls] = 1.;
       generalBrokenLine::bandSolveInPlace<2>(Mb, msc, n, ls);  // M^-1 e_{n-2}
-      const double miaa = msc[ia * ls], miba = msc[ib * ls];
+      const double_st miaa = msc[ia * ls], miba = msc[ib * ls];
       for (u_int i = 0; i < n; i++)
         msc[i * ls] = 0.;
       msc[ib * ls] = 1.;
       generalBrokenLine::bandSolveInPlace<2>(Mb, msc, n, ls);  // M^-1 e_{n-1}
-      const double miab = msc[ia * ls], mibb = msc[ib * ls];
-      const double wa = wcol[ia * ls], wb = wcol[ib * ls];
+      const double_st miab = msc[ia * ls], mibb = msc[ib * ls];
+      const double_st wa = wcol[ia * ls], wb = wcol[ib * ls];
       // A^-1(g,h) = M^-1(g,h) + w(g)w(h)/schur ; A^-1(g,n) = -w(g)/schur ; A^-1(n,n) = 1/schur
-      const double aUU = miaa + wa * wa * invS;
+      const double_st aUU = miaa + wa * wa * invS;
       // M^-1 is symmetric; the two unit-column solves give the same off-diagonal twice, so average
       // them rather than pick one (the difference is pure round-off and the symmetrised value is the
       // one the T transform below assumes).
-      const double aUV = 0.5 * (miab + miba) + wa * wb * invS;
-      const double aVV = mibb + wb * wb * invS;
-      const double aUK = -wa * invS;
-      const double aVK = -wb * invS;
-      const double aKK = invS;
+      const double_st aUV = 0.5 * (miab + miba) + wa * wb * invS;
+      const double_st aVV = mibb + wb * wb * invS;
+      const double_st aUK = -wa * invS;
+      const double_st aVK = -wb * invS;
+      const double_st aKK = invS;
 
       // T (u_{n-2}, u_{n-1}, dk) -> (u, u', kappa) at node n-1, p2b_local.loc_from.
-      const double h = data.sTransverse(ib) - data.sTransverse(ia);
+      const double_st h = data.sTransverse(ib) - data.sTransverse(ia);
       if (alpaka::math::abs(acc, h) > 1e-6 && aUU > 0. && aVV > 0. && aKK > 0.) {
-        const double t10 = -1. / h, t11 = 1. / h, t12 = -h / 2.;
+        const double_st t10 = -1. / h, t11 = 1. / h, t12 = -h / 2.;
         // row0 = (0,1,0) ; row1 = (t10,t11,t12) ; row2 = (0,0,1)
-        const double c00 = aVV;
-        const double c01 = t10 * aUV + t11 * aVV + t12 * aVK;
-        const double c02 = aVK;
-        const double c11 = t10 * (t10 * aUU + t11 * aUV + t12 * aUK) + t11 * (t10 * aUV + t11 * aVV + t12 * aVK) +
+        const double_st c00 = aVV;
+        const double_st c01 = t10 * aUV + t11 * aVV + t12 * aVK;
+        const double_st c02 = aVK;
+        const double_st c11 = t10 * (t10 * aUU + t11 * aUV + t12 * aUK) + t11 * (t10 * aUV + t11 * aVV + t12 * aVK) +
                            t12 * (t10 * aUK + t11 * aVK + t12 * aKK);
-        const double c12 = t10 * aUK + t11 * aVK + t12 * aKK;
-        const double c22 = aKK;
+        const double_st c12 = t10 * aUK + t11 * aVK + t12 * aKK;
+        const double_st c22 = aKK;
         if (c00 > 0. && c11 > 0. && c22 > 0. && alpaka::math::isfinite(acc, c11)) {
           o.c00 = float(c00);
           o.c01 = float(c01);
@@ -303,30 +304,30 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
           // varBeta(n-2) * f(matXX0(n-2)) / f(matXX0(n-3)) with f(x) = x (1 + 0.038 ln x)^2, and the
           // Brownian-bridge factor (1 - m1^2/m2) conditions it on the chord being pinned at both hits.
           // m1/m2 come from the same material march the fit ran.
-          double kink = 0.;
+          double_st kink = 0.;
           if constexpr (N >= 4) {
-            auto fxx = [&](double x) {
-              const double xs = x > 1e-12 ? x : 1e-12;
-              const double lg = 1. + 0.038 * alpaka::math::log(acc, xs);
+            auto fxx = [&](double_st x) {
+              const double_st xs = x > 1e-12 ? x : static_cast<double_st>(1e-12);
+              const double_st lg = 1. + 0.038 * alpaka::math::log(acc, xs);
               return xs * lg * lg;
             };
-            const double mPrev = data.matXX0(n - 3);
-            const double mLast = data.matXX0(n - 2);
-            const double vbPrev = data.varBeta(n - 2);
+            const double_st mPrev = data.matXX0(n - 3);
+            const double_st mLast = data.matXX0(n - 2);
+            const double_st vbPrev = data.varBeta(n - 2);
             if (mPrev > 1e-9 && mLast > 1e-9 && vbPrev > 0.)
               kink = vbPrev * fxx(mLast) / fxx(mPrev);
           }
-          double d1 = 0., w1 = 0.;
-          const double rA = alpaka::math::sqrt(acc, hits(0, ia) * hits(0, ia) + hits(1, ia) * hits(1, ia));
-          const double rB = alpaka::math::sqrt(acc, hits(0, ib) * hits(0, ib) + hits(1, ib) * hits(1, ib));
-          double bridge = 0.25;  // the uniform-material limit of 1 - m1^2/m2
+          double_st d1 = 0., w1 = 0.;
+          const double_st rA = alpaka::math::sqrt(acc, hits(0, ia) * hits(0, ia) + hits(1, ia) * hits(1, ia));
+          const double_st rB = alpaka::math::sqrt(acc, hits(0, ib) * hits(0, ib) + hits(1, ib) * hits(1, ib));
+          double_st bridge = 0.25;  // the uniform-material limit of 1 - m1^2/m2
           if (rhoMap_ != nullptr) {
-            const double Wg = brokenline::segmentXX0Moments(acc, rhoMap_, rA, hits(2, ia), rB, hits(2, ib), d1, w1);
+            const double_st Wg = brokenline::segmentXX0Moments(acc, rhoMap_, rA, hits(2, ia), rB, hits(2, ib), d1, w1);
             // S1 = w1 W d1, S2 = w1 W d1^2 => 1 - m1^2/m2 = 1 - (S1/W)^2/(S2/W) = 1 - w1
             if (Wg > 0. && w1 > 0. && w1 <= 1.)
               bridge = 1. - w1;
           }
-          o.qgapCoef = float(alpaka::math::max(acc, kink * bridge, 0.));
+          o.qgapCoef = float(alpaka::math::max(acc, static_cast<double>(kink * bridge), 0.));
 
           // The anchor, in the WALK's own arc convention: the walk measures every arc from the
           // helix's alphaOrigin (its PCA), so the payload must publish node n-1's arc in THAT frame,
@@ -366,22 +367,22 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
           // u(a + ds) = u(a) + u'(a) ds - int_0^ds (ds-s') dkappa(s') ds', so moving the reference
           // loses nothing.
           if (fitCorrections_) {
-            const double xTot = data.innerXX0 + fitWs.gapXX0(int(N) - 2);  // beamline -> node n-1 [X/X0]
-            const double pTot =
+            const double_st xTot = data.innerXX0 + fitWs.gapXX0(int(N) - 2);  // beamline -> node n-1 [X/X0]
+            const double_st pTot =
                 alpaka::math::sqrt(acc, riemannFit::sqr(bFieldEff * fast_fit(2)) * (1. + riemannFit::sqr(slope)));
             if (xTot > 0. && pTot > 0. && fast_fit(2) > 0.) {
               // kappa_0 * (dE/dX)_eff / p, with (dE/dX)_eff = dE(X_tot)/X_tot: the linearisation is
               // anchored on the total column exactly as in Kernel_BLFit, so the two agree by
               // construction on the span the fit measured.
-              const double kEl = (generalBrokenLine::elossTypicalColumn(acc, pTot, xTot) / xTot) / (pTot * fast_fit(2));
+              const double_st kEl = (generalBrokenLine::elossTypicalColumn(acc, pTot, xTot) / xTot) / (pTot * fast_fit(2));
               // The fit's march (BrokenLine.h circleFit): mid-gap column quadrature, u(0) = u'(0) = 0
               // at node 0. gapXX0 is only read here, so no in-place slot juggling is needed.
-              double xPrev = data.innerXX0;                   // column at node 0
-              double xCur = data.innerXX0 + fitWs.gapXX0(0);  // column at node 1
-              double du = 0., dup = 0.;
+              double_st xPrev = data.innerXX0;                   // column at node 0
+              double_st xCur = data.innerXX0 + fitWs.gapXX0(0);  // column at node 1
+              double_st du = 0., dup = 0.;
               for (u_int k = 0; k + 1 < n; ++k) {
-                const double dsg = data.sTransverse(k + 1) - data.sTransverse(k);
-                const double dk = kEl * 0.5 * (xPrev + xCur);  // mid-gap curvature increment [1/cm]
+                const double_st dsg = data.sTransverse(k + 1) - data.sTransverse(k);
+                const double_st dk = kEl * 0.5 * (xPrev + xCur);  // mid-gap curvature increment [1/cm]
                 du += dup * dsg - 0.5 * dk * dsg * dsg;
                 dup -= dk * dsg;
                 xPrev = xCur;
@@ -422,10 +423,10 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                                                  const double bField,
                                                                  ::reco::TrackSoAConstView tracks,
                                                                  caStructures::tindex_type const* __restrict__ ptkids,
-                                                                 double* __restrict__ phits,
-                                                                 float* __restrict__ phits_ge,
-                                                                 double* __restrict__ pfast_fit,
-                                                                 double* __restrict__ pscratch,
+                                                                 double_st* __restrict__ phits,
+                                                                 float_st* __restrict__ phits_ge,
+                                                                 double_st* __restrict__ pfast_fit,
+                                                                 double_st* __restrict__ pscratch,
                                                                  caExtension::ExtPredCoeff* __restrict__ out,
                                                                  const float* __restrict__ rhoMap_,
                                                                  const float* __restrict__ bMap_,
@@ -514,10 +515,10 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                   const double bField,
                                   ::reco::TrackSoAConstView tracks,
                                   caStructures::tindex_type const* __restrict__ ptkids,
-                                  double* __restrict__ phits,
-                                  float* __restrict__ phits_ge,
-                                  double* __restrict__ pfast_fit,
-                                  double* __restrict__ pscratch,
+                                  double_st* __restrict__ phits,
+                                  float_st* __restrict__ phits_ge,
+                                  double_st* __restrict__ pfast_fit,
+                                  double_st* __restrict__ pscratch,
                                   caExtension::ExtPredCoeff* __restrict__ out) const {
       constexpr uint32_t kTotal = caExtension::kExtPredNBins * Stride;
       for (uint32_t grp : cms::alpakatools::uniform_groups(acc, kTotal)) {
@@ -648,12 +649,12 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
         constexpr std::size_t kTkTotal = kExtPredTkBase<nt, int(nBins)>;
 
         auto tkidDevice = cms::alpakatools::make_device_buffer<typename caStructures::tindex_type[]>(queue, kTkTotal);
-        auto hitsDevice = cms::alpakatools::make_device_buffer<double[]>(queue, kHitsTotal);
-        auto hits_geDevice = cms::alpakatools::make_device_buffer<float[]>(queue, kGeTotal);
-        auto fast_fit_resultsDevice = cms::alpakatools::make_device_buffer<double[]>(queue, kFfTotal);
+        auto hitsDevice = cms::alpakatools::make_device_buffer<double_st[]>(queue, kHitsTotal);
+        auto hits_geDevice = cms::alpakatools::make_device_buffer<float_st[]>(queue, kGeTotal);
+        auto fast_fit_resultsDevice = cms::alpakatools::make_device_buffer<double_st[]>(queue, kFfTotal);
         // Band scratch: kLegacyFitScratchDoubles<N> = 23N+3 doubles per lane ([prepared 7N | band
         // block 6N+1 | helpers 10N+2]), strided by kRefitStride.
-        auto scratchDevice = cms::alpakatools::make_device_buffer<double[]>(queue, kScrTotal);
+        auto scratchDevice = cms::alpakatools::make_device_buffer<double_st[]>(queue, kScrTotal);
         auto slotDevice = cms::alpakatools::make_device_buffer<uint32_t[]>(queue, nBins);
 
         constexpr uint32_t blockSize = 64;

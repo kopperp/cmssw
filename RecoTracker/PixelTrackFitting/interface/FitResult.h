@@ -7,20 +7,22 @@
 #include <Eigen/Core>
 #include <Eigen/Eigenvalues>
 
+#include "Utilities/Cadna/interface/CadnaEigenTypes.h"
+
 namespace riemannFit {
 
-  using Vector2d = Eigen::Vector2d;
-  using Vector3d = Eigen::Vector3d;
-  using Vector4d = Eigen::Vector4d;
-  using Vector5d = Eigen::Matrix<double, 5, 1>;
-  using Matrix2d = Eigen::Matrix2d;
-  using Matrix3d = Eigen::Matrix3d;
-  using Matrix4d = Eigen::Matrix4d;
-  using Matrix5d = Eigen::Matrix<double, 5, 5>;
-  using Matrix6d = Eigen::Matrix<double, 6, 6>;
+  using Vector2d = Eigen::Vector<double_st, 2>;
+  using Vector3d = Eigen::Vector<double_st, 3>;
+  using Vector4d = Eigen::Vector<double_st, 4>;
+  using Vector5d = Eigen::Matrix<double_st, 5, 1>;
+  using Matrix2d = Eigen::Matrix<double_st, 2, 2>;
+  using Matrix3d = Eigen::Matrix<double_st, 3, 3>;
+  using Matrix4d = Eigen::Matrix<double_st, 4, 4>;
+  using Matrix5d = Eigen::Matrix<double_st, 5, 5>;
+  using Matrix6d = Eigen::Matrix<double_st, 6, 6>;
 
   template <int N>
-  using Matrix3xNd = Eigen::Matrix<double, 3, N>;  // used for inputs hits
+  using Matrix3xNd = Eigen::Matrix<double_st, 3, N>;  // used for inputs hits
 
   struct CircleFit {
     Vector3d par;  //!< parameter: (X0,Y0,R)
@@ -31,7 +33,7 @@ namespace riemannFit {
       |cov(X0, R)|cov(Y0, R)|cov( R, R)|
     */
     int32_t qCharge;  //!< particle charge
-    float chi2;
+    float_st chi2;
   };
 
   struct LineFit {
@@ -41,7 +43,7 @@ namespace riemannFit {
       |cov(c_t,c_t)|cov(Zip,c_t)| \n
       |cov(c_t,Zip)|cov(Zip,Zip)|
     */
-    double chi2;
+    double_st chi2;
   };
 
   struct HelixFit {
@@ -54,8 +56,8 @@ namespace riemannFit {
       |(phi,c_t)|(Tip,c_t)|(p_t,c_t)|(c_t,c_t)|(Zip,c_t)| \n
       |(phi,Zip)|(Tip,Zip)|(p_t,Zip)|(c_t,Zip)|(Zip,Zip)|
     */
-    float chi2_circle;
-    float chi2_line;
+    float_st chi2_circle;
+    float_st chi2_line;
     //    Vector4d fast_fit;
     int32_t qCharge;  //!< particle charge
   };  // __attribute__((aligned(16)));
