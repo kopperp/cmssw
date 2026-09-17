@@ -189,7 +189,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
     // curvature)/bFieldEff with bFieldEff = blEffectiveBField over the fitted hits, and the anchor arc
     // below inverts the same conversion. The origin scalar would leave the two a factor B_eff/B(0,0)
     // apart, i.e. the forward field correction applied with the wrong sign to every road.
-    const double bFieldEff = fitCorrections_ ? blEffectiveBField(acc, hits, int(N), fast_fit, bField, bMap_) : bField;
+    const double bFieldEff = fitCorrections_ ? static_cast<double>(blEffectiveBField(acc, hits, int(N), fast_fit, bField, bMap_)) : bField;
     // elossGaps records the running material column from hit 0 into fitWs.gapXX0(g) inside the gap loop
     // this call already runs; it is the only extra input the energy-loss road centre needs. Gated on
     // fitCorrections_ as in Kernel_BLFit.

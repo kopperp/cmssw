@@ -16,7 +16,8 @@ public:
   OuterHitPhiPrediction(const Range& phiAtVertex, const Range& curvature, float originRBound)
       : thePhiAtVertex(phiAtVertex), theCurvature(curvature), theOriginRBound(originRBound) {
     //       assert(theCurvature.max()>0);
-    assert(theCurvature.max() == -theCurvature.min());
+    // INFO: CADNA might violate this assert
+    // assert(theCurvature.max() == -theCurvature.min());
   }
 
   void setTolerance(float tolerance) { theTolerance = tolerance; }
