@@ -283,7 +283,8 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
 
   public:
     explicit CAHitNtupletAlpaka(const edm::ParameterSet& iConfig, const ::reco::CAGeometryParams* iCache);
-    ~CAHitNtupletAlpaka() override = default;
+    // ~CAHitNtupletAlpaka() override = default;
+    ~CAHitNtupletAlpaka() override { cadna_end(); }
 
     // acquire() launches the whole CA build (kernels + the one async offsets readback, see
     // CAHitNtupletGenerator::beginTuplesAsync); the framework schedules produce only after
@@ -814,6 +815,10 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
         minNumberOfDoublets_(iConfig.getParameter<uint32_t>("minNumberOfDoublets")),
         minNumberOfTuples_(iConfig.getParameter<uint32_t>("minNumberOfTuples")),
         deviceAlgo_(iConfig) {
+
+    std::cout << "CAHitNtupletAlpaka [Constructor]" << std::endl;
+    cadna_init(-1);
+
     auto trackerRecHitsSoAInputTag = iConfig.getParameter<edm::InputTag>("trackerRecHitsSoA");
     if (!trackerRecHitsSoAInputTag.label().empty()) {
       trackerRecHitToken_ = consumes(trackerRecHitsSoAInputTag);

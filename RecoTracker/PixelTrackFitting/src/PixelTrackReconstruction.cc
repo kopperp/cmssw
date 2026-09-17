@@ -14,6 +14,7 @@
 #include "RecoTracker/PixelTrackFitting/interface/PixelTrackReconstruction.h"
 #include "RecoTracker/TkHitPairs/interface/RegionsSeedingHitSets.h"
 #include "RecoTracker/TkTrackingRegions/interface/TrackingRegion.h"
+// #include "Utilities/Cadna/interface/CadnaEigenTypes.h"
 
 using namespace pixeltrackfitting;
 using edm::ParameterSet;
@@ -56,6 +57,9 @@ void PixelTrackReconstruction::run(TracksWithTTRHs& tracks, edm::Event& ev, cons
     filter = hfilter.product();
   }
 
+  std::cout << "Begin PixelTrackReconstruction" << std::endl;
+  // cadna_init(-1);
+
   std::vector<const TrackingRecHit*> hits;
   hits.reserve(4);
   for (const auto& regionHitSets : hitSets) {
@@ -78,7 +82,7 @@ void PixelTrackReconstruction::run(TracksWithTTRHs& tracks, edm::Event& ev, cons
           continue;
         }
       }
-      /* roll back to verify if HLT tau is affected  
+      /* roll back to verify if HLT tau is affected
       // all legacy tracks are "highPurity"
       // setting all others bits as well (as in ckf)
       track->setQuality(reco::TrackBase::loose);
@@ -90,7 +94,9 @@ void PixelTrackReconstruction::run(TracksWithTTRHs& tracks, edm::Event& ev, cons
     }
   }
 
-  // skip ovelrapped tracks
+  // cadna_end();
+
+  // skip overlapped tracks
   if (theCleanerToken.isInitialized()) {
     const auto& cleaner = es.getData(theCleanerToken);
     if (cleaner.fast())
