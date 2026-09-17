@@ -341,6 +341,9 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                               float_st* __restrict__ phits_ge,
                                               double_st* __restrict__ pfast_fit,
                                               double_st* __restrict__ pscratch) const {
+
+      const int phits_digits_in = phits[0].nb_significant_digit();
+
       auto tkid = ptkids[local_idx];
 
       ALPAKA_ASSERT_ACC(tkid < tupleMultiplicity->capacity());
@@ -405,6 +408,40 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
       if (fitCorrections_)
         brokenline::transportToFittedPca(acc, hits, data, bFieldEff, circle, line, bMap_, bField);
       reco::copyFromCircle(results_view, circle.par, circle.cov, line.par, line.cov, 1.f / float(bFieldEff), tkid);
+
+      std::cout << "-- BrokenLineFitKernels.h | Kernel_BLFit --" << std::endl;
+      print_cadna_metric("pt", static_cast<float_st>(bFieldEff) / static_cast<float_st>(abs(circle.par(2))), phits_digits_in);
+      print_cadna_metric("eta", alpaka::math::asinh(acc, line.par(0)), phits_digits_in);
+      print_cadna_metric("chi2", (circle.chi2 + line.chi2) / (2 * N - 5), phits_digits_in);
+
+      // Primary track parameters
+      print_cadna_metric("d0", circle.par(0), phits_digits_in);
+      print_cadna_metric("phi0", circle.par(1), phits_digits_in);
+      print_cadna_metric("rho", circle.par(2), phits_digits_in);
+      print_cadna_metric("tan_lambda", line.par(0), phits_digits_in);
+      print_cadna_metric("z0", line.par(1), phits_digits_in);
+
+      // Decomposed fit chi2
+      print_cadna_metric("circle_chi2", circle.chi2, phits_digits_in);
+      print_cadna_metric("line_chi2", line.chi2, phits_digits_in);
+
+      // Circle fit covariance elements (3x3 symmetric)
+      print_cadna_metric("circle_cov_00", circle.cov(0, 0), phits_digits_in);
+      print_cadna_metric("circle_cov_01", circle.cov(0, 1), phits_digits_in);
+      print_cadna_metric("circle_cov_02", circle.cov(0, 2), phits_digits_in);
+      print_cadna_metric("circle_cov_11", circle.cov(1, 1), phits_digits_in);
+      print_cadna_metric("circle_cov_12", circle.cov(1, 2), phits_digits_in);
+      print_cadna_metric("circle_cov_22", circle.cov(2, 2), phits_digits_in);
+
+      // Line fit covariance elements (2x2 symmetric)
+      print_cadna_metric("line_cov_00", line.cov(0, 0), phits_digits_in);
+      print_cadna_metric("line_cov_01", line.cov(0, 1), phits_digits_in);
+      print_cadna_metric("line_cov_11", line.cov(1, 1), phits_digits_in);
+
+      // print_cadna_metric("pt [error]", hc.coeff(0, 0), phits_digits_in);
+      // print_cadna_metric("eta [error]", hc.coeff(1, 1), phits_digits_in);
+      // print_cadna_metric("chi2 [error]", hc.coeff(2, 2), phits_digits_in);
+
       results_view[tkid].pt() = static_cast<float_st>(bFieldEff) / static_cast<float_st>(abs(circle.par(2)));
       results_view[tkid].eta() = alpaka::math::asinh(acc, line.par(0));
       results_view[tkid].chi2() = (circle.chi2 + line.chi2) / (2 * N - 5);
