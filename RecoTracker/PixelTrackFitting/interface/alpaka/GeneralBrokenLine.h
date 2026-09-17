@@ -1327,16 +1327,13 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::generalBrokenLine {
     M(4, 4) = 1.;
     helixCov = M * perigeeCov * M.transpose();
 
-    // assert(false);
-
-    // edm::LogWarning("here");
-    std::cout << "-- GENERAL BROKEN LINE (HELIX FIT) --\n";
-    const int in_digits = static_cast<double_st>(0.).nb_significant_digit();
-    print_cadna_metric("Phi", perigee(2), in_digits);
-    print_cadna_metric("d0", perigee(2), in_digits);
-    print_cadna_metric("k = 1/R", perigee(2), in_digits);
-    print_cadna_metric("cotTheta", perigee(2), in_digits);
-    print_cadna_metric("z0", perigee(2), in_digits);
+    // std::cout << "-- GENERAL BROKEN LINE (HELIX FIT) --\n";
+    // const int in_digits = static_cast<double_st>(0.).nb_significant_digit();
+    // print_cadna_metric("Phi", perigee(2), in_digits);
+    // print_cadna_metric("d0", perigee(2), in_digits);
+    // print_cadna_metric("k = 1/R", perigee(2), in_digits);
+    // print_cadna_metric("cotTheta", perigee(2), in_digits);
+    // print_cadna_metric("z0", perigee(2), in_digits);
   }
 
 }  // namespace ALPAKA_ACCELERATOR_NAMESPACE::generalBrokenLine

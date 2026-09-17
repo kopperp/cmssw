@@ -640,7 +640,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
                                                                                        const double_st bField,
                                                                                        const float* rho,
                                                                                        PreparedGblData<n>& results,
-                                                                                       const double* matCached = nullptr,
+                                                                                       const double_st* matCached = nullptr,
                                                                                        double_st* gapD1 = nullptr,
                                                                                        double_st* gapW1 = nullptr) {
     riemannFit::Vector2d dVec;

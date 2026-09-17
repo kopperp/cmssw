@@ -9,6 +9,7 @@
 #include "FWCore/Utilities/interface/isFinite.h"  // bit-pattern finiteness test for the failed-refit guard
 #include "HeterogeneousCore/AlpakaInterface/interface/prefixScan.h"  // parallel hit compaction (Counts->scan->Scatter)
 #include "Utilities/Cadna/interface/CadnaEigenTypes.h"
+#include "Utilities/Cadna/interface/CadnaOutput.h"
 #include "DataFormats/TrackSoA/interface/alpaka/TracksSoACollection.h"  // dedup union-refit scratch output SoA
 #include <optional>  // fused-ladder partition tables, allocated only on the fused arm
 
@@ -293,6 +294,22 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
       }
     }  // loop on concurrent fits
 
+    // INFO: FINAL CADNA OUTPUT
+    // print_cadna_metric("phi", hitsDevice.par(0), hits_gp_digits_in);
+    // print_cadna_metric("tip", hitsDevice.par(1), hits_gp_digits_in);
+    // print_cadna_metric("curvature", hitsDevice.par(2), hits_gp_digits_in);
+    // print_cadna_metric("CotTheta", hitsDevice.par(3), hits_gp_digits_in);
+    // print_cadna_metric("zip", hitsDevice.par(4), hits_gp_digits_in);
+    //
+    // print_cadna_metric("phi [error]", fittedTrack.cov(0, 0), hits_gp_digits_in);
+    // print_cadna_metric("tip [error]", fittedTrack.cov(1, 1), hits_gp_digits_in);
+    // print_cadna_metric("curvature [error]", fittedTrack.cov(2, 2), hits_gp_digits_in);
+    // print_cadna_metric("CotTheta [error]", fittedTrack.cov(3, 3), hits_gp_digits_in);
+    // print_cadna_metric("zip [error]", fittedTrack.cov(4, 4), hits_gp_digits_in);
+    //                                          hitsDevice.data(),
+    //                                          hits_geDevice.data(),
+    //                                          fast_fit_resultsDevice.data(),
+
     if (verboseDump_) {
       // tag=1 -> post-fit dump of the main-fit launch
       alpaka::exec<Acc1D>(queue,
@@ -362,7 +379,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
       // Per-lane phase buffer of the phase-split GBL fit ladder (kBLPhaseDoubles doubles/lane; see
       // the Kernel_BLFitPhase* kernels). Caching-allocator backed like the other refit scratch.
       auto phaseDevice =
-          cms::alpakatools::make_device_buffer<double[]>(queue, std::size_t(nt) * std::size_t(kBLPhaseDoubles));
+          cms::alpakatools::make_device_buffer<double_st[]>(queue, std::size_t(nt) * std::size_t(kBLPhaseDoubles));
       // Per-lane fit-hit-id table (fitHitId[lane*N + i]). Only wired when the caller asked for the
       // fit-rejected hit to be removed from the emitted list (e3DropHitId_ set by refitMergedTwins);
       // otherwise pFitHitId stays null and Kernel_BLFastFitRefit skips the write. Tiny (nt*maxN uint32

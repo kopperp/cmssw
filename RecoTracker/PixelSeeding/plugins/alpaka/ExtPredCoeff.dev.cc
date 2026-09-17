@@ -209,7 +209,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
     // i.e. the forward field correction re-applied with the wrong sign to every road built from this
     // payload. Same helper, same hits, same gate as the fit; fitCorrections off (or a null map) gives
     // the scalar.
-    const double bFieldEff = fitCorrections_ ? blEffectiveBField(acc, hits, int(N), fast_fit, bField, bMap_) : bField;
+    const double bFieldEff = fitCorrections_ ? double(blEffectiveBField(acc, hits, int(N), fast_fit, bField, bMap_)) : bField;
     // elossGaps records the running material column from hit 0 into fitWs.gapXX0(g) inside the gap
     // loop this call already runs (one add + one store per gap); it is the only extra input the
     // energy-loss road centre needs. Gated on fitCorrections_ exactly as Kernel_BLFit gates it.
