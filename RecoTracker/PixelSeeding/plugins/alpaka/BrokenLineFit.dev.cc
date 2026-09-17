@@ -8,6 +8,7 @@
 #include "FWCore/Utilities/interface/isFinite.h"  // bit-pattern finiteness test for the failed-refit guard
 #include "HeterogeneousCore/AlpakaInterface/interface/prefixScan.h"  // parallel hit compaction (Counts->scan->Scatter)
 #include "Utilities/Cadna/interface/CadnaEigenTypes.h"
+#include "Utilities/Cadna/interface/CadnaOutput.h"
 #include "DataFormats/TrackSoA/interface/alpaka/TracksSoACollection.h"  // dedup union-refit scratch output SoA
 
 namespace ALPAKA_ACCELERATOR_NAMESPACE {
@@ -265,7 +266,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
       // Per-lane phase buffer of the phase-split GBL fit ladder (kBLPhaseDoubles doubles/lane; see
       // the Kernel_BLFitPhase* kernels). Caching-allocator backed like the other refit scratch.
       auto phaseDevice =
-          cms::alpakatools::make_device_buffer<double[]>(queue, std::size_t(nt) * std::size_t(kBLPhaseDoubles));
+          cms::alpakatools::make_device_buffer<double_st[]>(queue, std::size_t(nt) * std::size_t(kBLPhaseDoubles));
       // Per-lane fit-hit-id table (fitHitId[lane*N + i]), wired only when the caller asked for the
       // fit-rejected hit to be removed from the emitted list; otherwise pFitHitId stays null and
       // Kernel_BLFastFitRefit skips the write.

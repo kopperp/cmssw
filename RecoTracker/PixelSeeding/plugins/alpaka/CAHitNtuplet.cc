@@ -279,7 +279,8 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
 
   public:
     explicit CAHitNtupletAlpaka(const edm::ParameterSet& iConfig, const ::reco::CAGeometryParams* iCache);
-    ~CAHitNtupletAlpaka() override = default;
+    // ~CAHitNtupletAlpaka() override = default;
+    ~CAHitNtupletAlpaka() override { cadna_end(); }
 
     // acquire() launches the whole CA build (kernels plus one async readback of the offsets); the
     // framework schedules produce only after this event's queue has drained, waiting in its own
@@ -547,6 +548,10 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
         minNumberOfDoublets_(iConfig.getParameter<uint32_t>("minNumberOfDoublets")),
         minNumberOfTuples_(iConfig.getParameter<uint32_t>("minNumberOfTuples")),
         deviceAlgo_(iConfig) {
+
+    std::cout << "CAHitNtupletAlpaka [Constructor]" << std::endl;
+    cadna_init(-1);
+
     useFitCorrections_ = iConfig.getParameter<bool>("useFitCorrections");
     if (useFitCorrections_) {
       tokenBLMaterialMap_ = esConsumes();

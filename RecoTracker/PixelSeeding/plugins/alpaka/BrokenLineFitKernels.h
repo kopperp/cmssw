@@ -315,7 +315,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
   // BLBFieldMap.h). The hit-average of B_bend/Bz(0,0) scales the origin scalar, with tanLambda*cos(alpha)
   // = (cx*y - cy*x)/(|R|*r) carrying q^2 = 1, so the correction is charge-free. Null bMap -> origin field.
   template <typename TAcc, typename M3xN, typename V4>
-  ALPAKA_FN_ACC ALPAKA_FN_INLINE double blEffectiveBField(
+  ALPAKA_FN_ACC ALPAKA_FN_INLINE double_st blEffectiveBField(
       const TAcc& acc, const M3xN& hits, int n, const V4& fast_fit, double bField, const float* bMap) {
     if (bMap == nullptr)
       return bField;
@@ -452,7 +452,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
       // Per-track effective bending field: the hit-average of B_bend(r,z)/Bz(0,0), charge-free, equal to
       // bField where the map is flat. It carries the |z| falloff of Bz and the endcap radial component.
       // With fitCorrections_ off or bMap_ null this is the scalar bField.
-      const double bFieldEff = fitCorrections_ ? blEffectiveBField(acc, hits, int(N), fast_fit, bField, bMap_) : bField;
+      const double_st bFieldEff = fitCorrections_ ? blEffectiveBField(acc, hits, int(N), fast_fit, bField, bMap_) : static_cast<double_st>(bField);
       // bFieldEff enters as the momentum p = bFieldEff * radius * sqrt(1+slope^2) the Highland variance is
       // divided by, as the 1/bFieldEff of copyFromCircle's geometric-curvature -> q/pT conversion, and as
       // pt = bFieldEff/|curvature|.
@@ -834,11 +834,11 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                               float_st* __restrict__ phits_ge,
                                               double_st* __restrict__ pfast_fit,
                                               generalBrokenLine::GblNodeData* __restrict__ pgnodes,
-                                              double* __restrict__ pphase) const {
+                                              double_st* __restrict__ pphase) const {
       riemannFit::Map3xNdS<N, Stride> hits(phits + local_idx);
       riemannFit::Map4dS<Stride> fast_fit(pfast_fit + local_idx);
       riemannFit::Map6xNfS<N, Stride> hits_ge(phits_ge + local_idx);
-      double* phase = pphase + std::size_t(local_idx) * std::size_t(kBLPhaseDoubles);
+      double_st* phase = pphase + std::size_t(local_idx) * std::size_t(kBLPhaseDoubles);
       // Reference override before any reference-dependent preparation.
       if (iterFromPhase_) {
         fast_fit(0) = phase[kBLPhaseNextRef + 0];
@@ -847,7 +847,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
         fast_fit(3) = phase[kBLPhaseNextRef + 3];
       }
       // Per-track effective field; with bMap_ null this is the scalar bField.
-      const double bFieldEff =
+      const double_st bFieldEff =
           fieldFromPhase_ ? phase[kBLPhaseBFieldEff] : blEffectiveBField(acc, hits, int(N), fast_fit, bField, bMap_);
       // Publish this linearization's effective field for the out and outlier phases. Written on every
       // prep, so each phase sees its own iteration's value.
@@ -1021,8 +1021,9 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                               double_st* __restrict__ pfast_fit,
                                               generalBrokenLine::GblNodeData* __restrict__ pgnodes,
                                               double_st* __restrict__ pscratch,
-                                              double* __restrict__ pphase) const {
+                                              double_st* __restrict__ pphase) const {
 
+      const int phits_digits_in = phits[0].nb_significant_digit();
       const int pfast_fit_digits_in = pfast_fit[0].nb_significant_digit();
 
       riemannFit::Map4dS<Stride> fast_fit(pfast_fit + local_idx);
@@ -1045,7 +1046,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
       double_st* gblScratch = pscratch + std::size_t(local_idx) * std::size_t(kScratchStride);
       double_st* gFullDelta = gblScratch;
       double_st* gNodeVar = gblScratch + kBandDoubles;
-      double* phase = pphase + std::size_t(local_idx) * std::size_t(kBLPhaseDoubles);
+      double_st* phase = pphase + std::size_t(local_idx) * std::size_t(kBLPhaseDoubles);
       const bool usedInner = phase[kBLPhaseUsedInner] != 0.;
       const bool usedSplit = phase[kBLPhaseSplit] != 0.;
       const int qCharge = int(phase[kBLPhaseQCharge]);
@@ -1115,6 +1116,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
       }
 
       std::cout << "-- BrokenLineFitKernels.h | Kernel_BLFitPhaseSolve --" << std::endl;
+      print_cadna_metric("phits", phits[0], phits_digits_in);
       print_cadna_metric("fast_fit", pfast_fit[0], pfast_fit_digits_in);
     }
   };
@@ -1142,17 +1144,20 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                               typename caStructures::tindex_type const* __restrict__ ptkids,
                                               double_st* __restrict__ phits,
                                               double_st* __restrict__ pfast_fit,
-                                              double* __restrict__ pphase) const {
+                                              double_st* __restrict__ pphase) const {
+
+      const int phits_digits_in = phits[0].nb_significant_digit();
+
       auto tkid = ptkids[local_idx];
       riemannFit::Map3xNdS<N, Stride> hits(phits + local_idx);
       riemannFit::Map4dS<Stride> fast_fit(pfast_fit + local_idx);
-      double* phase = pphase + std::size_t(local_idx) * std::size_t(kBLPhaseDoubles);
+      double_st* phase = pphase + std::size_t(local_idx) * std::size_t(kBLPhaseDoubles);
       const int qCharge = int(phase[kBLPhaseQCharge]);
       const double_st sTrans0 = phase[kBLPhaseSTrans0];
       const double_st gchi2 = phase[kBLPhaseGChi2];
       // With bFieldFromPhase_ the prep of this linearization evaluated the field on exactly this fast_fit
       // and these hits, so recomputing it here could only reproduce it.
-      const double bFieldEff =
+      const double_st bFieldEff =
           bFieldFromPhase_ ? phase[kBLPhaseBFieldEff] : blEffectiveBField(acc, hits, int(N), fast_fit, bField, bMap_);
       generalBrokenLine::Vector5d corrPca;
       generalBrokenLine::Matrix5d covPca;
@@ -1170,12 +1175,32 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
       phase[kBLPhaseNextRef + 1] = nextRef(1);
       phase[kBLPhaseNextRef + 2] = nextRef(2);
       phase[kBLPhaseNextRef + 3] = nextRef(3);
-      const float ptVal = float(bFieldEff / alpaka::math::abs(acc, hp(2)));
+      const float_st ptVal = float_st(bFieldEff / alpaka::math::abs(acc, hp(2)));
       hp(2) /= bFieldEff;
       for (int a = 0; a < 5; ++a) {
         hc(2, a) /= bFieldEff;
         hc(a, 2) /= bFieldEff;
       }
+
+      std::cout << "-- BrokenLineFitKernels.h | Kernel_BLFitPhaseOut --" << std::endl;
+      // parameters are:
+      // 0: phi
+      // 1: tip
+      // 2: curvature
+      // 3: cottheta
+      // 4: zip
+      print_cadna_metric("phi", hp.coeff(0), phits_digits_in);
+      print_cadna_metric("tip", hp.coeff(1), phits_digits_in);
+      print_cadna_metric("curvature", hp.coeff(2), phits_digits_in);
+      print_cadna_metric("CotTheta", hp.coeff(3), phits_digits_in);
+      print_cadna_metric("zip", hp.coeff(4), phits_digits_in);
+
+      print_cadna_metric("phi [error]", hc.coeff(0, 0), phits_digits_in);
+      print_cadna_metric("tip [error]", hc.coeff(1, 1), phits_digits_in);
+      print_cadna_metric("curvature [error]", hc.coeff(2, 2), phits_digits_in);
+      print_cadna_metric("CotTheta [error]", hc.coeff(3, 3), phits_digits_in);
+      print_cadna_metric("zip [error]", hc.coeff(4, 4), phits_digits_in);
+
       reco::copyFromDense(results_view, hp, hc, tkid);
       results_view[tkid].pt() = ptVal;
       results_view[tkid].eta() = alpaka::math::asinh(acc, hp(3));
@@ -1231,7 +1256,11 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                               double_st* __restrict__ pfast_fit,
                                               generalBrokenLine::GblNodeData* __restrict__ pgnodes,
                                               double_st* __restrict__ pscratch,
-                                              double* __restrict__ pphase) const {
+                                              double_st* __restrict__ pphase) const {
+
+      const int phits_digits_in = phits[0].nb_significant_digit();
+      const int pfast_fit_digits_in = pfast_fit[0].nb_significant_digit();
+
       auto tkid = ptkids[local_idx];
       riemannFit::Map3xNdS<N, Stride> hits(phits + local_idx);
       riemannFit::Map4dS<Stride> fast_fit(pfast_fit + local_idx);
@@ -1254,13 +1283,13 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
       double_st* gblScratch = pscratch + std::size_t(local_idx) * std::size_t(kScratchStride);
       double_st* gFullDelta = gblScratch;
       double_st* gNodeVar = gblScratch + kBandDoubles;
-      double* phase = pphase + std::size_t(local_idx) * std::size_t(kBLPhaseDoubles);
+      double_st* phase = pphase + std::size_t(local_idx) * std::size_t(kBLPhaseDoubles);
       const bool usedInner = phase[kBLPhaseUsedInner] != 0.;
       const int qCharge = int(phase[kBLPhaseQCharge]);
       const double_st sTrans0 = phase[kBLPhaseSTrans0];
       const double_st innerXX0 = phase[kBLPhaseInnerXX0];
       // This linearization's effective field (see Kernel_BLFitPhaseOut::lane for the phase-buffer read).
-      const double bFieldEff =
+      const double_st bFieldEff =
           bFieldFromPhase_ ? phase[kBLPhaseBFieldEff] : blEffectiveBField(acc, hits, int(N), fast_fit, bField, bMap_);
       // The hits-only layout carrying upstream inner material cannot be re-solved faithfully, so it is
       // excluded here.
@@ -1349,6 +1378,26 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
           hc(2, a) /= bFieldEff;
           hc(a, 2) /= bFieldEff;
         }
+
+        std::cout << "-- BrokenLineFitKernels.h | Kernel_BLFitPhaseOutlier --" << std::endl;
+        // parameters are:
+        // 0: phi
+        // 1: tip
+        // 2: curvature
+        // 3: cottheta
+        // 4: zip
+        print_cadna_metric("phi", hp.coeff(0), phits_digits_in);
+        print_cadna_metric("tip", hp.coeff(1), phits_digits_in);
+        print_cadna_metric("curvature", hp.coeff(2), phits_digits_in);
+        print_cadna_metric("CotTheta", hp.coeff(3), phits_digits_in);
+        print_cadna_metric("zip", hp.coeff(4), phits_digits_in);
+
+        print_cadna_metric("phi [error]", hc.coeff(0, 0), phits_digits_in);
+        print_cadna_metric("tip [error]", hc.coeff(1, 1), phits_digits_in);
+        print_cadna_metric("curvature [error]", hc.coeff(2, 2), phits_digits_in);
+        print_cadna_metric("CotTheta [error]", hc.coeff(3, 3), phits_digits_in);
+        print_cadna_metric("zip [error]", hc.coeff(4, 4), phits_digits_in);
+
         reco::copyFromDense(results_view, hp, hc, tkid);
         results_view[tkid].pt() = ptVal;
         results_view[tkid].eta() = alpaka::math::asinh(acc, hp(3));
@@ -1398,7 +1447,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
       float_st* __restrict__ phits_ge,
       double_st* __restrict__ pfast_fit,
       generalBrokenLine::GblNodeData* __restrict__ pgnodes,
-      double* __restrict__ pphase) {
+      double_st* __restrict__ pphase) {
     const Kernel_BLFitPhasePrep<N, TrackerTraits, Stride> k{cfg.rhoMap,
                                                             cfg.iterFromPhase,
                                                             cfg.bMap,
@@ -1420,7 +1469,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                                                     double_st* __restrict__ pfast_fit,
                                                                     generalBrokenLine::GblNodeData* __restrict__ pgnodes,
                                                                     double_st* __restrict__ pscratch,
-                                                                    double* __restrict__ pphase) {
+                                                                    double_st* __restrict__ pphase) {
     const Kernel_BLFitPhaseSolve<N, TrackerTraits, Stride> k{
         cfg.outlierReject, cfg.finalIter, cfg.bMap, cfg.fieldKernelWeights};
     k.lane(acc, lane, bField, phits, pfast_fit, pgnodes, pscratch, pphase);
@@ -1436,7 +1485,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
       typename caStructures::tindex_type const* __restrict__ ptkids,
       double_st* __restrict__ phits,
       double_st* __restrict__ pfast_fit,
-      double* __restrict__ pphase) {
+      double_st* __restrict__ pphase) {
     const Kernel_BLFitPhaseOut<N, TrackerTraits, Stride> k{cfg.bMap, cfg.bFieldFromPhase, cfg.chargeSymmetric};
     k.lane(acc, lane, bField, results_view, ptkids, phits, pfast_fit, pphase);
   }
@@ -1453,7 +1502,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
       double_st* __restrict__ pfast_fit,
       generalBrokenLine::GblNodeData* __restrict__ pgnodes,
       double_st* __restrict__ pscratch,
-      double* __restrict__ pphase) {
+      double_st* __restrict__ pphase) {
     const Kernel_BLFitPhaseOutlier<N, TrackerTraits, Stride> k{cfg.outlierReject,
                                                                cfg.fitHitId,
                                                                cfg.dropHitId,
@@ -1480,7 +1529,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                   float_st* __restrict__ phits_ge,
                                   double_st* __restrict__ pfast_fit,
                                   generalBrokenLine::GblNodeData* __restrict__ pgnodes,
-                                  double* __restrict__ pphase,
+                                  double_st* __restrict__ pphase,
                                   const uint32_t* __restrict__ pBlockMap) const {
       constexpr auto invalidTkId = std::numeric_limits<typename caStructures::tindex_type>::max();
       constexpr uint32_t kTotal = kFusedBlocks * kFitBlock;
@@ -1534,7 +1583,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                   double_st* __restrict__ pfast_fit,
                                   generalBrokenLine::GblNodeData* __restrict__ pgnodes,
                                   double_st* __restrict__ pscratch,
-                                  double* __restrict__ pphase,
+                                  double_st* __restrict__ pphase,
                                   const uint32_t* __restrict__ pBlockMap) const {
       constexpr auto invalidTkId = std::numeric_limits<typename caStructures::tindex_type>::max();
       constexpr uint32_t kTotal = kFusedBlocks * kFitBlock;
@@ -1586,7 +1635,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                   typename caStructures::tindex_type const* __restrict__ ptkids,
                                   double_st* __restrict__ phits,
                                   double_st* __restrict__ pfast_fit,
-                                  double* __restrict__ pphase,
+                                  double_st* __restrict__ pphase,
                                   const uint32_t* __restrict__ pBlockMap) const {
       constexpr auto invalidTkId = std::numeric_limits<typename caStructures::tindex_type>::max();
       constexpr uint32_t kTotal = kFusedBlocks * kFitBlock;
@@ -1642,7 +1691,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                   double_st* __restrict__ pfast_fit,
                                   generalBrokenLine::GblNodeData* __restrict__ pgnodes,
                                   double_st* __restrict__ pscratch,
-                                  double* __restrict__ pphase,
+                                  double_st* __restrict__ pphase,
                                   const uint32_t* __restrict__ pBlockMap) const {
       constexpr auto invalidTkId = std::numeric_limits<typename caStructures::tindex_type>::max();
       constexpr uint32_t kTotal = kFusedBlocks * kFitBlock;
@@ -2042,7 +2091,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
     generalBrokenLine::GblNodeData* pgnodes;
 
     double_st* pgblScratch;
-    double* pphase;
+    double_st* pphase;
     // Per-lane fit-hit-id table (written by Kernel_BLFastFitRefit) and the per-merged-track dropped-hit-id
     // output (read by the merger's post-refit hit-list compaction). Both null leaves the fit-rejected hit
     // in the emitted list and writes neither.
