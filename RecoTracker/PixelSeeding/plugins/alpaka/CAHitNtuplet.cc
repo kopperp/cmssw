@@ -283,7 +283,8 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
 
   public:
     explicit CAHitNtupletAlpaka(const edm::ParameterSet& iConfig, const ::reco::CAGeometryParams* iCache);
-    ~CAHitNtupletAlpaka() override = default;
+    // ~CAHitNtupletAlpaka() override = default;
+    ~CAHitNtupletAlpaka() override { cadna_end(); }
 
     // acquire() launches the whole CA build (kernels + the one async offsets readback, see
     // CAHitNtupletGenerator::beginTuplesAsync); the framework schedules produce only after

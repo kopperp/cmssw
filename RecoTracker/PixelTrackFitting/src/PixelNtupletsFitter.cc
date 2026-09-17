@@ -17,6 +17,7 @@
 #include "RecoTracker/PixelTrackFitting/interface/RiemannFit.h"
 #include "RecoTracker/TkMSParametrization/interface/PixelRecoUtilities.h"
 #include "Utilities/Cadna/interface/CadnaEigenTypes.h"
+#include "Utilities/Cadna/interface/CadnaOutput.h"
 
 using namespace std;
 
@@ -47,6 +48,7 @@ std::unique_ptr<reco::Track> PixelNtupletsFitter::run(const std::vector<const Tr
 
   assert(nhits == 4);
   riemannFit::Matrix3xNd<4> hits_gp;
+  const int hits_gp_digits_in = hits_gp.coeff(0).nb_significant_digit();
 
   Eigen::Matrix<float_st, 6, 4> hits_ge = Eigen::Matrix<float_st, 6, 4>::Zero();
 
@@ -62,12 +64,26 @@ std::unique_ptr<reco::Track> PixelNtupletsFitter::run(const std::vector<const Tr
 
   int iCharge = fittedTrack.qCharge;
 
+  std::cout << "-- FITTED TRACK --" << std::endl;
   // parameters are:
   // 0: phi
   // 1: tip
   // 2: curvature
   // 3: cottheta
   // 4: zip
+  print_cadna_metric("phi", fittedTrack.par(0), hits_gp_digits_in);
+  print_cadna_metric("tip", fittedTrack.par(1), hits_gp_digits_in);
+  print_cadna_metric("curvature", fittedTrack.par(2), hits_gp_digits_in);
+  print_cadna_metric("CotTheta", fittedTrack.par(3), hits_gp_digits_in);
+  print_cadna_metric("zip", fittedTrack.par(4), hits_gp_digits_in);
+
+  print_cadna_metric("phi [error]", fittedTrack.cov(0, 0), hits_gp_digits_in);
+  print_cadna_metric("tip [error]", fittedTrack.cov(1, 1), hits_gp_digits_in);
+  print_cadna_metric("curvature [error]", fittedTrack.cov(2, 2), hits_gp_digits_in);
+  print_cadna_metric("CotTheta [error]", fittedTrack.cov(3, 3), hits_gp_digits_in);
+  print_cadna_metric("zip [error]", fittedTrack.cov(4, 4), hits_gp_digits_in);
+
+  print_cadna_metric("chi2", fittedTrack.chi2_line + fittedTrack.chi2_circle, hits_gp_digits_in);
   float valPhi = fittedTrack.par(0);
 
   float valTip = fittedTrack.par(1);
