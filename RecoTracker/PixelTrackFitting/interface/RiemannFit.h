@@ -74,7 +74,10 @@ namespace riemannFit {
     riemannFit::printIt(&s_arcs, "Scatter_cov_line - s_arcs: ");
 #endif
     constexpr uint n = N;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     double_st p_t = fmin(static_cast<double_st>(20.), fast_fit(2) * bField);  // limit pt to avoid too small error!!!
+#pragma GCC diagnostic pop
     double_st p_2 = p_t * p_t * (1. + 1. / sqr(fast_fit(3)));
     VectorNd<N> rad_lengths_S;
     // See documentation at http://eigen.tuxfamily.org/dox/group__TutorialArrayClass.html
@@ -126,7 +129,10 @@ namespace riemannFit {
   template <typename M2xN, typename V4, int N>
   inline MatrixNd<N> scatter_cov_rad(const M2xN& p2D, const V4& fast_fit, VectorNd<N> const& rad, double_st B) {
     constexpr uint n = N;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     double_st p_t = fmin(static_cast<double_st>(20.), fast_fit(2) * B);  // limit pt to avoid too small error!!!
+#pragma GCC diagnostic pop
     double_st p_2 = p_t * p_t * (1. + 1. / sqr(fast_fit(3)));
     double_st theta = atan(fast_fit(3));
     theta = theta < 0. ? theta + M_PI : theta;
@@ -543,7 +549,10 @@ namespace riemannFit {
     printf("circle_fit - AFTER MIN_EIGEN\n");
 #endif
     printIt(&vVec, "v BEFORE INVERSION");
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     vVec *= (vVec(2) > 0) ? 1 : -1;  // TO FIX dovrebbe essere N(3)>0
+#pragma GCC diagnostic pop
     printIt(&vVec, "v AFTER INVERSION");
     // This hack to be able to run on GPU where the automatic assignment to a
     // double from the vector multiplication is not working.
@@ -614,8 +623,11 @@ namespace riemannFit {
       }
 
       {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         const ArrayNd<N> t0 = (VectorXd::Constant(n, 1.) * p3D.row(0));
         const ArrayNd<N> t1 = (VectorXd::Constant(n, 1.) * p3D.row(1));
+#pragma GCC diagnostic pop
         const ArrayNd<N> t00 = p3D.row(0).transpose() * p3D.row(0);
         const ArrayNd<N> t01 = p3D.row(0).transpose() * p3D.row(1);
         const ArrayNd<N> t11 = p3D.row(1).transpose() * p3D.row(1);
@@ -741,9 +753,12 @@ namespace riemannFit {
       Eigen::Matrix<double_st, 3, 4> j3Mat;  // Jacobian (v0,v1,v2,c)->(X0,Y0,R)
       {
         const double_st t = 1. / tempH;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         j3Mat << -v2x2_inv, 0, vVec(0) * sqr(v2x2_inv) * 2., 0, 0, -v2x2_inv, vVec(1) * sqr(v2x2_inv) * 2., 0,
             vVec(0) * v2x2_inv * t, vVec(1) * v2x2_inv * t,
             -tempH * sqr(v2x2_inv) * 2. - (2. * tempC + vVec(2)) * v2x2_inv * t, -t;
+#pragma GCC diagnostic pop
       }
       printIt(&j3Mat, "circle_fit - J3:");
 
@@ -833,7 +848,10 @@ namespace riemannFit {
 
       // associated Jacobian, used in weights and errors- computation
       const double_st temp0 = -circle.qCharge * circle.par(2) * 1. / (sqr(dot) + sqr(cross));
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
       double_st d_X0 = 0., d_Y0 = 0., d_R = 0.;  // good approximation for big pt and eta
+#pragma GCC diagnostic pop
       if (error) {
         d_X0 = -temp0 * ((pVec(1) + oVec(1)) * dot - (pVec(0) - oVec(0)) * cross);
         d_Y0 = temp0 * ((pVec(0) + oVec(0)) * dot - (oVec(1) - pVec(1)) * cross);
@@ -841,7 +859,10 @@ namespace riemannFit {
       }
       const double_st d_x = temp0 * (oVec(1) * dot + oVec(0) * cross);
       const double_st d_y = temp0 * (-oVec(0) * dot + oVec(1) * cross);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
       jxMat << d_X0, d_Y0, d_R, d_x, d_y, 0., 0., 0., 0., 0., 0., 1.;
+#pragma GCC diagnostic pop
 
       covMat.block(0, 0, 3, 3) = circle.cov;
       covMat(3, 3) = hits_ge.col(i)[0];                 // x errors
@@ -907,7 +928,10 @@ namespace riemannFit {
     const auto cosTheta = cos(theta);
     auto common_factor = 1. / (sinTheta - sol(1, 0) * cosTheta);
     Eigen::Matrix<double_st, 2, 2> jMat;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     jMat << 0., common_factor * common_factor, common_factor, sol(0, 0) * cosTheta * common_factor * common_factor;
+#pragma GCC diagnostic pop
 
     double_st tempM = common_factor * (sol(1, 0) * sinTheta + cosTheta);
     double_st tempQ = common_factor * sol(0, 0);

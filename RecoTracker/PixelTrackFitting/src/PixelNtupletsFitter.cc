@@ -21,7 +21,7 @@
 
 using namespace std;
 
-PixelNtupletsFitter::PixelNtupletsFitter(float nominalB, const MagneticField* field, bool useRiemannFit)
+PixelNtupletsFitter::PixelNtupletsFitter(float_st nominalB, const MagneticField* field, bool useRiemannFit)
     : nominalB_(nominalB), field_(field), useRiemannFit_(useRiemannFit) {}
 
 std::unique_ptr<reco::Track> PixelNtupletsFitter::run(const std::vector<const TrackingRecHit*>& hits,
@@ -50,6 +50,8 @@ std::unique_ptr<reco::Track> PixelNtupletsFitter::run(const std::vector<const Tr
   riemannFit::Matrix3xNd<4> hits_gp;
   const int hits_gp_digits_in = hits_gp.coeff(0).nb_significant_digit();
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
   Eigen::Matrix<float_st, 6, 4> hits_ge = Eigen::Matrix<float_st, 6, 4>::Zero();
 
   for (unsigned int i = 0; i < nhits; ++i) {
@@ -58,9 +60,10 @@ std::unique_ptr<reco::Track> PixelNtupletsFitter::run(const std::vector<const Tr
     hits_ge.col(i) << errors[i].cxx(), errors[i].cyx(), errors[i].cyy(), errors[i].czx(), errors[i].czy(),
         errors[i].czz();
   }
+#pragma GCC diagnostic pop
 
-  HelixFit fittedTrack = useRiemannFit_ ? riemannFit::helixFit(hits_gp, hits_ge, nominalB_, true)
-                                        : brokenline::helixFit(hits_gp, hits_ge, nominalB_);
+  HelixFit fittedTrack = useRiemannFit_ ? riemannFit::helixFit(hits_gp, hits_ge, static_cast<double_st>(nominalB_), true)
+                                        : brokenline::helixFit(hits_gp, hits_ge, static_cast<double_st>(nominalB_));
 
   int iCharge = fittedTrack.qCharge;
 

@@ -121,8 +121,11 @@ namespace brokenline {
     scalar lambda = (0.5 * tempA) / (riemannFit::sqr(1. + tempU) * tempU);
     scalar mu = 1. / (tempU * (1. + tempU)) + rho * lambda;
     scalar zeta = riemannFit::sqr(deltaOrth) + riemannFit::sqr(deltaPara);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     jacobian << xi * tempSmallU * tempV, -xi * riemannFit::sqr(rho) * deltaOrth, xi * deltaPara,
         2. * mu * tempSmallU * deltaPara, 2. * mu * tempV, mu * zeta - lambda * tempA, 0, 0, 1.;
+#pragma GCC diagnostic pop
 
     // translated circle parameters
     // phi
@@ -596,8 +599,11 @@ namespace brokenline {
     circleFit(hits, hits_ge, fast_fit, bField, data, circle);
 
     // the circle fit gives k, but here we want p_t, so let's change the parameter and the covariance matrix
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     jacobian << 1., 0, 0, 0, 1., 0, 0, 0,
         -abs(circle.par(2)) * bField / (riemannFit::sqr(circle.par(2)) * circle.par(2));
+#pragma GCC diagnostic pop
     circle.par(2) = bField / abs(circle.par(2));
     circle.cov = jacobian * circle.cov * jacobian.transpose();
 

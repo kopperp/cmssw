@@ -179,8 +179,11 @@ namespace riemannFit {
       const double_st temp2 = sqr(circle.par(0)) * 1. / temp0;
       const double_st temp3 = 1. / temp1 * circle.qCharge;
       Matrix3d j4Mat;
-      j4Mat << -circle.par(1) * temp2 * 1. / sqr(circle.par(0)), temp2 * 1. / circle.par(0), 0., circle.par(0) * temp3,
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+      j4Mat << -circle.par(1) * temp2 * 1. / sqr(circle.par(0)), temp2 * 1. / circle.par(0), static_cast<double_st>(0.), circle.par(0) * temp3,
           circle.par(1) * temp3, -circle.qCharge, 0., 0., B;
+#pragma GCC diagnostic pop
       circle.cov = j4Mat * circle.cov * j4Mat.transpose();
     }
     circle.par = par_pak;
@@ -202,8 +205,11 @@ namespace riemannFit {
     const double_st temp2 = sqr(circle.par(0)) * 1. / temp0;
     const double_st temp3 = 1. / temp1 * circle.qCharge;
     Matrix3d j4Mat;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     j4Mat << -circle.par(1) * temp2 * 1. / sqr(circle.par(0)), temp2 * 1. / circle.par(0), 0., circle.par(0) * temp3,
         circle.par(1) * temp3, -circle.qCharge, 0., 0., -circle.qCharge / (circle.par(2) * circle.par(2));
+#pragma GCC diagnostic pop
     circle.cov = j4Mat * circle.cov * j4Mat.transpose();
 
     circle.par = par_pak;
