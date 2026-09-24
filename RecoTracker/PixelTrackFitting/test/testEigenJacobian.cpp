@@ -9,6 +9,7 @@ using riemannFit::Vector5d;
 #include "DataFormats/GeometrySurface/interface/Surface.h"
 #include "DataFormats/TrajectoryState/interface/LocalTrajectoryParameters.h"
 #include "TrackingTools/TrajectoryParametrization/interface/GlobalTrajectoryParameters.h"
+#include "Utilities/Cadna/interface/CadnaEigenTypes.h"
 
 #include "DataFormats/GeometrySurface/interface/Plane.h"
 
@@ -28,7 +29,7 @@ namespace {
 // old pixeltrack version...
 Matrix5d transfFast(Matrix5d cov, Vector5d const& p) {
   auto sqr = [](auto x) { return x * x; };
-  auto sinTheta = 1 / std::sqrt(1 + p(3) * p(3));
+  auto sinTheta = 1 / sqrt(1 + p(3) * p(3));
   auto cosTheta = p(3) * sinTheta;
   cov(2, 2) = sqr(sinTheta) * (cov(2, 2) * sqr(1. / (p(2) * p(2))) + cov(3, 3) * sqr(cosTheta * sinTheta / p(2)));
   cov(3, 2) = cov(2, 3) = cov(3, 3) * cosTheta * sqr(sinTheta) / p(2);
@@ -43,7 +44,7 @@ Matrix5d loadCov(Vector5d const& e) {
     cov(i, i) = e(i) * e(i);
   for (int i = 0; i < 5; ++i) {
     for (int j = 0; j < i; ++j) {
-      double v = 0.3 * std::sqrt(cov(i, i) * cov(j, j));  // this makes the matrix pos defined
+      double v = 0.3 * sqrt(cov(i, i) * cov(j, j));  // this makes the matrix pos defined
       cov(i, j) = (i + j) % 2 ? -0.4 * v : 0.1 * v;
       cov(j, i) = cov(i, j);
     }
@@ -87,8 +88,8 @@ int main() {
             m(i, j) = cov1(i, j);
 
         float phi = par0(0);
-        float sp = std::sin(phi);
-        float cp = std::cos(phi);
+        float sp = sin(phi);
+        float cp = cos(phi);
         Surface::RotationType rot(sp, -cp, 0, 0, 0, -1.f, cp, sp, 0);
 
         Surface::PositionType bs(0., 0., 0.);
@@ -120,7 +121,7 @@ int main() {
 
   std::cout << "del1^2 " << (del1.array()*del1.array()).transpose() << std::endl;
   std::cout << std::endl;
-  
+
   std::cout << "cov0\n" << cov0 << std::endl;
   std::cout << "cov1\n" << cov1 << std::endl;
   std::cout << "cov2\n" << cov2 << std::endl;

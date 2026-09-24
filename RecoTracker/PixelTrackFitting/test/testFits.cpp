@@ -9,6 +9,9 @@
 #include "RecoTracker/PixelTrackFitting/interface/RiemannFit.h"
 #endif
 
+#include "Utilities/Cadna/interface/CadnaEigenTypes.h"
+#include "Utilities/Cadna/interface/CadnaOutput.h"
+
 #include "test_common.h"
 
 using namespace Eigen;
@@ -18,7 +21,7 @@ namespace riemannFit {
   constexpr uint32_t stride() { return maxNumberOfTracks(); }
   // hits
   template <int N>
-  using Matrix3xNd = Eigen::Matrix<double, 3, N>;
+  using Matrix3xNd = Eigen::Matrix<double_st, 3, N>;
   template <int N>
   using Map3xNd = Eigen::Map<Matrix3xNd<N>, 0, Eigen::Stride<3 * stride(), stride()> >;
   // errors
@@ -94,6 +97,7 @@ void testFit() {
 
   fillHitsAndHitsCov(hits, hits_ge);
 
+  const int in_digits = hits.coeff(0).nb_significant_digit();
   std::cout << "sizes " << N << ' ' << sizeof(hits) << ' ' << sizeof(hits_ge) << ' ' << sizeof(Vector4d) << std::endl;
 
   std::cout << "Generated hits:\n" << hits << std::endl;
@@ -101,13 +105,17 @@ void testFit() {
 
   // FAST_FIT_CPU
 #ifdef USE_BL
-  Vector4d fast_fit_results;
+  Eigen::Vector<double_st, 4> fast_fit_results;
   brokenline::fastFit(hits, fast_fit_results);
 #else
-  Vector4d fast_fit_results;
+  Eigen::Vector<double_st, 4> fast_fit_results;
   riemannFit::fastFit(hits, fast_fit_results);
 #endif
   std::cout << "Fitted values (FastFit, [X0, Y0, R, tan(theta)]):\n" << fast_fit_results << std::endl;
+  print_cadna_metric("X0", fast_fit_results.coeff(0), in_digits);
+  print_cadna_metric("Y0", fast_fit_results.coeff(1), in_digits);
+  print_cadna_metric("R", fast_fit_results.coeff(2), in_digits);
+  print_cadna_metric("tan(theta)", fast_fit_results.coeff(3), in_digits);
 
   // CIRCLE_FIT CPU
 
@@ -121,8 +129,8 @@ void testFit() {
   brokenline::lineFit(hits_ge, fast_fit_results, B, data, line_fit_results);
   brokenline::circleFit(hits, hits_ge, fast_fit_results, B, data, circle_fit_results);
   Jacob << 1., 0, 0, 0, 1., 0, 0, 0,
-      -B / std::copysign(riemannFit::sqr(circle_fit_results.par(2)), circle_fit_results.par(2));
-  circle_fit_results.par(2) = B / std::abs(circle_fit_results.par(2));
+      -B / copysign(riemannFit::sqr(circle_fit_results.par(2)), circle_fit_results.par(2));
+  circle_fit_results.par(2) = B / abs(circle_fit_results.par(2));
   circle_fit_results.cov = Jacob * circle_fit_results.cov * Jacob.transpose();
 #else
   riemannFit::VectorNd<N> rad = (hits.block(0, 0, 2, N).colwise().norm());
@@ -138,11 +146,18 @@ void testFit() {
 #endif
 
   std::cout << "Fitted values (CircleFit):\n"
-            << circle_fit_results.par << "\nchi2 " << circle_fit_results.chi2 << std::endl;
-  std::cout << "Fitted values (LineFit):\n" << line_fit_results.par << "\nchi2 " << line_fit_results.chi2 << std::endl;
+            << static_cast<Eigen::Vector<double, 3>>(circle_fit_results.par) << "\nchi2 " << static_cast<float>(circle_fit_results.chi2) << std::endl;
+  print_cadna_metric("par", circle_fit_results.par, in_digits);
+  print_cadna_metric("chi2", circle_fit_results.chi2, in_digits);
 
-  std::cout << "Fitted cov (CircleFit) CPU:\n" << circle_fit_results.cov << std::endl;
-  std::cout << "Fitted cov (LineFit): CPU\n" << line_fit_results.cov << std::endl;
+  std::cout << "Fitted values (LineFit):\n" << static_cast<Eigen::Vector<double, 2>>(line_fit_results.par) << "\nchi2 " << static_cast<float>(line_fit_results.chi2) << std::endl;
+  print_cadna_metric("par", line_fit_results.par, in_digits);
+  print_cadna_metric("chi2", line_fit_results.chi2, in_digits);
+
+  std::cout << "Fitted cov (CircleFit) CPU:\n" << static_cast<Eigen::Matrix<double, 3, 3>>(circle_fit_results.cov) << std::endl;
+  print_cadna_metric("cov", circle_fit_results.cov, in_digits);
+  std::cout << "Fitted cov (LineFit): CPU\n" << static_cast<Eigen::Matrix<double, 2, 2>>(line_fit_results.cov) << std::endl;
+  print_cadna_metric("cov", line_fit_results.cov, in_digits);
 }
 
 int main(int argc, char* argv[]) {

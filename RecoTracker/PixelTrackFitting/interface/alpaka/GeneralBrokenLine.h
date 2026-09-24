@@ -16,6 +16,9 @@
 #include "HeterogeneousCore/AlpakaInterface/interface/config.h"
 #include "RecoTracker/PixelTrackFitting/interface/BLBFieldMap.h"    // normalized (Bz,Br) r-z map
 #include "RecoTracker/PixelTrackFitting/interface/BLMaterialMap.h"  // the ionization column of a path
+
+#include "Utilities/Cadna/interface/CadnaEigenTypes.h"
+#include "Utilities/Cadna/interface/CadnaOutput.h"
 namespace ALPAKA_ACCELERATOR_NAMESPACE::generalBrokenLine {
 
   using namespace cms::alpakatools;

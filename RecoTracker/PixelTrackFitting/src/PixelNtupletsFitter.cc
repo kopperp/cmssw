@@ -16,6 +16,7 @@
 #include "RecoTracker/PixelTrackFitting/interface/PixelTrackErrorParam.h"
 #include "RecoTracker/PixelTrackFitting/interface/RiemannFit.h"
 #include "RecoTracker/TkMSParametrization/interface/PixelRecoUtilities.h"
+#include "Utilities/Cadna/interface/CadnaEigenTypes.h"
 
 using namespace std;
 
@@ -47,7 +48,7 @@ std::unique_ptr<reco::Track> PixelNtupletsFitter::run(const std::vector<const Tr
   assert(nhits == 4);
   riemannFit::Matrix3xNd<4> hits_gp;
 
-  Eigen::Matrix<float, 6, 4> hits_ge = Eigen::Matrix<float, 6, 4>::Zero();
+  Eigen::Matrix<float_st, 6, 4> hits_ge = Eigen::Matrix<float_st, 6, 4>::Zero();
 
   for (unsigned int i = 0; i < nhits; ++i) {
     hits_gp.col(i) << points[i].x(), points[i].y(), points[i].z();
@@ -77,13 +78,13 @@ std::unique_ptr<reco::Track> PixelNtupletsFitter::run(const std::vector<const Tr
   float valPt = fittedTrack.par(2);
   //
   //  PixelTrackErrorParam param(valEta, valPt);
-  float errValPhi = std::sqrt(fittedTrack.cov(0, 0));
-  float errValTip = std::sqrt(fittedTrack.cov(1, 1));
+  float errValPhi = sqrt(fittedTrack.cov(0, 0));
+  float errValTip = sqrt(fittedTrack.cov(1, 1));
 
-  float errValPt = std::sqrt(fittedTrack.cov(2, 2));
+  float errValPt = sqrt(fittedTrack.cov(2, 2));
 
-  float errValCotTheta = std::sqrt(fittedTrack.cov(3, 3));
-  float errValZip = std::sqrt(fittedTrack.cov(4, 4));
+  float errValCotTheta = sqrt(fittedTrack.cov(3, 3));
+  float errValZip = sqrt(fittedTrack.cov(4, 4));
 
   float chi2 = fittedTrack.chi2_line + fittedTrack.chi2_circle;
 
