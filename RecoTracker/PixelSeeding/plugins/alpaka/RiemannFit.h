@@ -213,6 +213,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
     }
   };
 
+  // Do NOT call hv.offsetStubs() from host - that would dereference device memory and segfault!
   template <typename TrackerTraits>
   void HelixFit<TrackerTraits>::launchRiemannKernels(const HitsMultiView &hv,
                                                      const ::reco::CAModulesConstView &cm,

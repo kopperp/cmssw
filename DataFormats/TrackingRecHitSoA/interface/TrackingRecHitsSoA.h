@@ -3,6 +3,7 @@
 
 #include <Eigen/Dense>
 
+#include "DataFormats/SoATemplate/interface/SoAConstMultiView.h"
 #include "DataFormats/SoATemplate/interface/SoALayout.h"
 #include "DataFormats/SoATemplate/interface/SoABlocks.h"
 #include "DataFormats/TrackingRecHitSoA/interface/SiPixelHitStatus.h"
