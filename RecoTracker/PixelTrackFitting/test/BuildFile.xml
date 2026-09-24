@@ -16,23 +16,27 @@
 
 <bin file="testFits.cpp">
   <use name="eigen"/>
+  <use name="Utilities/Cadna"/>
   <flags CXXFLAGS="-g"/>
 </bin>
 
 <bin file="testFits.cpp" name="testBrokenLineFit">
   <use name="eigen"/>
   <use name="RecoTracker/PixelTrackFitting"/>
+  <use name="Utilities/Cadna"/>
   <flags CXXFLAGS="-g -DUSE_BL"/>
 </bin>
 
 <bin file="testFits.cpp" name="testFitsDump">
   <use name="eigen"/>
+  <use name="Utilities/Cadna"/>
   <flags CXXFLAGS="-g -DRFIT_DEBUG"/>
 </bin>
 
 <bin file="PixelTrackFits.cc">
   <use name="eigen"/>
   <use name="root"/>
+  <use name="Utilities/Cadna"/>
   <flags CXXFLAGS="-DEIGEN_NO_DEBUG -O2"/>
 </bin>
 
@@ -40,12 +44,14 @@
   <use name="eigen"/>
   <use name="root"/>
   <use name="RecoTracker/PixelTrackFitting"/>
+  <use name="Utilities/Cadna"/>
   <flags CXXFLAGS="-DEIGEN_NO_DEBUG -DUSE_BL"/>
 </bin>
 
 <bin file="PixelTrackFits.cc" name="PixelTrackFits_Debug">
   <use name="eigen"/>
   <use name="root"/>
+  <use name="Utilities/Cadna"/>
   <flags CXXFLAGS="-g"/>
 </bin>
 
@@ -55,6 +61,7 @@
   <use name="MagneticField/Engine"/>
   <use name="TrackingTools/AnalyticalJacobians"/>
   <use name="TrackingTools/TrajectoryParametrization"/>
+  <use name="Utilities/Cadna"/>
   <flags CXXFLAGS="-g"/>
 </bin>
 
@@ -64,6 +71,7 @@
   <use name="FWCore/Utilities"/>
   <use name="HeterogeneousCore/AlpakaInterface"/>
   <use name="RecoTracker/PixelTrackFitting"/>
+  <use name="Utilities/Cadna"/>
   <flags ALPAKA_BACKENDS="1"/>
 </bin>
 
@@ -73,6 +81,7 @@
   <use name="FWCore/Utilities"/>
   <use name="HeterogeneousCore/AlpakaInterface"/>
   <use name="RecoTracker/PixelTrackFitting"/>
+  <use name="Utilities/Cadna"/>
   <flags ALPAKA_BACKENDS="1"/>
 </bin>
 

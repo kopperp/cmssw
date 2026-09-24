@@ -3,57 +3,59 @@
 
 #include "DataFormats/Math/interface/choleskyInversion.h"
 #include "RecoTracker/PixelTrackFitting/interface/FitResult.h"
+#include "Utilities/Cadna/interface/CadnaEigenTypes.h"
 
 namespace riemannFit {
 
   constexpr double epsilon = 1.e-4;  //!< used in numerical derivative (J2 in Circle_fit())
 
-  using VectorXd = Eigen::VectorXd;
-  using MatrixXd = Eigen::MatrixXd;
+  using VectorXd = Eigen::Vector<double_st, Eigen::Dynamic>;
+  using MatrixXd = Eigen::Matrix<double_st, Eigen::Dynamic, Eigen::Dynamic>;
   template <int N>
-  using MatrixNd = Eigen::Matrix<double, N, N>;
+  using MatrixNd = Eigen::Matrix<double_st, N, N>;
   template <int N>
-  using MatrixNplusONEd = Eigen::Matrix<double, N + 1, N + 1>;
+  using MatrixNplusONEd = Eigen::Matrix<double_st, N + 1, N + 1>;
   template <int N>
-  using ArrayNd = Eigen::Array<double, N, N>;
+  using ArrayNd = Eigen::Array<double_st, N, N>;
   template <int N>
-  using Matrix2Nd = Eigen::Matrix<double, 2 * N, 2 * N>;
+  using Matrix2Nd = Eigen::Matrix<double_st, 2 * N, 2 * N>;
   template <int N>
-  using Matrix3Nd = Eigen::Matrix<double, 3 * N, 3 * N>;
+  using Matrix3Nd = Eigen::Matrix<double_st, 3 * N, 3 * N>;
   template <int N>
-  using Matrix2xNd = Eigen::Matrix<double, 2, N>;
+  using Matrix2xNd = Eigen::Matrix<double_st, 2, N>;
   template <int N>
-  using Array2xNd = Eigen::Array<double, 2, N>;
+  using Array2xNd = Eigen::Array<double_st, 2, N>;
   template <int N>
-  using MatrixNx3d = Eigen::Matrix<double, N, 3>;
+  using MatrixNx3d = Eigen::Matrix<double_st, N, 3>;
   template <int N>
-  using MatrixNx5d = Eigen::Matrix<double, N, 5>;
+  using MatrixNx5d = Eigen::Matrix<double_st, N, 5>;
   template <int N>
-  using VectorNd = Eigen::Matrix<double, N, 1>;
+  using VectorNd = Eigen::Matrix<double_st, N, 1>;
   template <int N>
-  using VectorNplusONEd = Eigen::Matrix<double, N + 1, 1>;
+  using VectorNplusONEd = Eigen::Matrix<double_st, N + 1, 1>;
   template <int N>
-  using Vector2Nd = Eigen::Matrix<double, 2 * N, 1>;
+  using Vector2Nd = Eigen::Matrix<double_st, 2 * N, 1>;
   template <int N>
-  using Vector3Nd = Eigen::Matrix<double, 3 * N, 1>;
+  using Vector3Nd = Eigen::Matrix<double_st, 3 * N, 1>;
   template <int N>
-  using RowVectorNd = Eigen::Matrix<double, 1, 1, N>;
+  using RowVectorNd = Eigen::Matrix<double_st, 1, 1, N>;
   template <int N>
-  using RowVector2Nd = Eigen::Matrix<double, 1, 2 * N>;
+  using RowVector2Nd = Eigen::Matrix<double_st, 1, 2 * N>;
 
-  using Matrix2x3d = Eigen::Matrix<double, 2, 3>;
+  using Matrix2x3d = Eigen::Matrix<double_st, 2, 3>;
 
-  using Matrix3f = Eigen::Matrix3f;
-  using Vector3f = Eigen::Vector3f;
-  using Vector4f = Eigen::Vector4f;
-  using Vector6f = Eigen::Matrix<double, 6, 1>;
+  using Matrix3f = Eigen::Matrix<float_st, 3, 3>;
+  using Vector3f = Eigen::Vector<float_st, 3>;
+  using Vector4f = Eigen::Vector<float_st, 4>;
+  // ERROR: ARE WE SURE ABOUT THIS?
+  using Vector6f = Eigen::Matrix<double_st, 6, 1>;
 
   template <class C>
   void printIt(C* m, const char* prefix = "") {
 #ifdef RFIT_DEBUG
     for (uint r = 0; r < m->rows(); ++r) {
       for (uint c = 0; c < m->cols(); ++c) {
-        printf("%s Matrix(%d,%d) = %g\n", prefix, r, c, (*m)(r, c));
+        printf("%s Matrix(%d,%d) = %g\n", prefix, r, c, static_cast<double>((*m)(r, c)));
       }
     }
 #endif
@@ -75,11 +77,11 @@ namespace riemannFit {
     \return z component of the cross product.
   */
 
-  inline double cross2D(const Vector2d& a, const Vector2d& b) { return a.x() * b.y() - a.y() * b.x(); }
+  inline double_st cross2D(const Vector2d& a, const Vector2d& b) { return a.x() * b.y() - a.y() * b.x(); }
 
   /*!
    *  load error in CMSSW format to our formalism
-   *  
+   *
    */
   template <typename M6xNf, typename M2Nd>
   void loadCovariance2D(M6xNf const& ge, M2Nd& hits_cov) {
@@ -167,15 +169,15 @@ namespace riemannFit {
     \param B magnetic field in Gev/cm/c unit.
     \param error flag for errors computation.
   */
-  inline void par_uvrtopak(CircleFit& circle, const double B, const bool error) {
+  inline void par_uvrtopak(CircleFit& circle, const double_st B, const bool error) {
     Vector3d par_pak;
-    const double temp0 = circle.par.head(2).squaredNorm();
-    const double temp1 = sqrt(temp0);
+    const double_st temp0 = circle.par.head(2).squaredNorm();
+    const double_st temp1 = sqrt(temp0);
     par_pak << atan2(circle.qCharge * circle.par(0), -circle.qCharge * circle.par(1)),
         circle.qCharge * (temp1 - circle.par(2)), circle.par(2) * B;
     if (error) {
-      const double temp2 = sqr(circle.par(0)) * 1. / temp0;
-      const double temp3 = 1. / temp1 * circle.qCharge;
+      const double_st temp2 = sqr(circle.par(0)) * 1. / temp0;
+      const double_st temp3 = 1. / temp1 * circle.qCharge;
       Matrix3d j4Mat;
       j4Mat << -circle.par(1) * temp2 * 1. / sqr(circle.par(0)), temp2 * 1. / circle.par(0), 0., circle.par(0) * temp3,
           circle.par(1) * temp3, -circle.qCharge, 0., 0., B;
@@ -192,13 +194,13 @@ namespace riemannFit {
   */
   inline void fromCircleToPerigee(CircleFit& circle) {
     Vector3d par_pak;
-    const double temp0 = circle.par.head(2).squaredNorm();
-    const double temp1 = sqrt(temp0);
+    const double_st temp0 = circle.par.head(2).squaredNorm();
+    const double_st temp1 = sqrt(temp0);
     par_pak << atan2(circle.qCharge * circle.par(0), -circle.qCharge * circle.par(1)),
         circle.qCharge * (temp1 - circle.par(2)), circle.qCharge / circle.par(2);
 
-    const double temp2 = sqr(circle.par(0)) * 1. / temp0;
-    const double temp3 = 1. / temp1 * circle.qCharge;
+    const double_st temp2 = sqr(circle.par(0)) * 1. / temp0;
+    const double_st temp3 = 1. / temp1 * circle.qCharge;
     Matrix3d j4Mat;
     j4Mat << -circle.par(1) * temp2 * 1. / sqr(circle.par(0)), temp2 * 1. / circle.par(0), 0., circle.par(0) * temp3,
         circle.par(1) * temp3, -circle.qCharge, 0., 0., -circle.qCharge / (circle.par(2) * circle.par(2));
@@ -214,7 +216,7 @@ namespace riemannFit {
   template <typename VI5, typename MI5, typename VO5, typename MO5>
   inline void transformToPerigeePlane(VI5 const& ip, MI5 const& icov, VO5& op, MO5& ocov) {
     auto sinTheta2 = 1. / (1. + ip(3) * ip(3));
-    auto sinTheta = std::sqrt(sinTheta2);
+    auto sinTheta = sqrt(sinTheta2);
     auto cosTheta = ip(3) * sinTheta;
 
     op(0) = sinTheta * ip(2);

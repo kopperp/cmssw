@@ -108,7 +108,7 @@ namespace {
       cov(i, i) = e(i) * e(i);
     for (int i = 0; i < 5; ++i)
       for (int j = 0; j < i; ++j) {
-        const double v = 0.3 * std::sqrt(cov(i, i) * cov(j, j));
+        const double v = 0.3 * sqrt(cov(i, i) * cov(j, j));
         cov(i, j) = cov(j, i) = (i + j) % 2 ? -0.4 * v : 0.1 * v;
       }
     return cov;
@@ -139,17 +139,17 @@ int main() {
               // 1. the values: what the code publishes must be the parameters on that plane.
               Vector5d op;
               Matrix5d ocov;
-              const Matrix5d icov = loadCov((Vector5d() << 2e-3, 2e-2, 0.02 * std::abs(ip(2)), 5e-3, 5e-2).finished());
+              const Matrix5d icov = loadCov((Vector5d() << 2e-3, 2e-2, 0.02 * abs(ip(2)), 5e-3, 5e-2).finished());
               riemannFit::transformToPerigeePlane(ip, icov, op, ocov);
               const Vector5d truth = localOnPlane(ip, f);
               for (int i = 0; i < 5; ++i)
-                worstVal = std::max(worstVal, std::abs(op(i) - truth(i)));
+                worstVal = fmax(worstVal, abs(op(i) - truth(i)));
 
               // 2. every entry of the Jacobian, by central finite differences of the same map.
               const Matrix5d jCode = codeJacobian(ip);
               Matrix5d jNum;
               for (int j = 0; j < 5; ++j) {
-                const double h = 1e-6 * std::max(1., std::abs(ip(j)));
+                const double h = 1e-6 * fmax(1., abs(ip(j)));
                 Vector5d pp = ip, pm = ip;
                 pp(j) += h;
                 pm(j) -= h;
@@ -157,7 +157,7 @@ int main() {
               }
               for (int i = 0; i < 5; ++i)
                 for (int j = 0; j < 5; ++j) {
-                  const double d = std::abs(jNum(i, j) - jCode(i, j));
+                  const double d = abs(jNum(i, j) - jCode(i, j));
                   if (d > worstJac) {
                     worstJac = d;
                     worstRow = i;
@@ -169,9 +169,9 @@ int main() {
               const Matrix5d expected = jCode * icov * jCode.transpose();
               for (int i = 0; i < 5; ++i)
                 for (int j = 0; j < 5; ++j)
-                  worstCov = std::max(
+                  worstCov = fmax(
                       worstCov,
-                      std::abs(ocov(i, j) - expected(i, j)) / std::sqrt(expected(i, i) * expected(j, j) + 1e-300));
+                      abs(ocov(i, j) - expected(i, j)) / sqrt(expected(i, i) * expected(j, j) + 1e-300));
             }
 
   std::printf("testPerigeeJacobian: %ld states\n", nStates);

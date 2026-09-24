@@ -16,6 +16,8 @@
 #endif
 
 #include <alpaka/alpaka.hpp>
+#include "Utilities/Cadna/interface/CadnaEigenTypes.h"
+#include "Utilities/Cadna/interface/CadnaOutput.h"
 
 #include "DataFormats/TrackingRecHitSoA/interface/TrackingRecHitsSoA.h"
 #include "HeterogeneousCore/AlpakaInterface/interface/config.h"
@@ -141,9 +143,9 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                                      HitsView const& hh,
                                                      ::reco::CAModulesConstView const& cm,
                                                      typename caStructures::tindex_type* __restrict__ ptkids,
-                                                     double* __restrict__ phits,
-                                                     float* __restrict__ phits_ge,
-                                                     double* __restrict__ pfast_fit,
+                                                     double_st* __restrict__ phits,
+                                                     float_st* __restrict__ phits_ge,
+                                                     double_st* __restrict__ pfast_fit,
                                                      uint32_t nHitsL,
                                                      uint32_t nHitsH,
                                                      bool hasStubs) {
@@ -202,19 +204,19 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
         // stubs the global error is built here from the local error through that frame (OTRecHitsSoA has no
         // pre-computed global-error columns).
         auto frame = cm.innerSensorFrame(hh[hit].detectorIndex());
-        float xerrFit = hh[hit].xerrLocal();
+        float_st xerrFit = hh[hit].xerrLocal();
         // Stub transverse-error calibration (fit input only): scale the local-x VARIANCE by the squared
         // pull width (2S barrel 0.68, PS barrel 0.80, disks 0.92/0.95) so the fit weights match the real
         // resolution. Fit-input only -- track finding is untouched.
         if (hasStubsRt && isStub(hh, int32_t(hit))) {
           const bool is2S = hh[hit].yerrLocal() > 0.1f;                                // strip vs macro-pixel
           const bool isBarrelHit = alpaka::math::abs(acc, hh[hit].zGlobal()) < 118.f;  // OT barrel vs TEDD
-          const float f = is2S ? (isBarrelHit ? 0.4624f : 0.8464f)                     // sigma 0.68 / 0.92
-                               : (isBarrelHit ? 0.64f : 0.9025f);                      // sigma 0.80 / 0.95
+          const float_st f = is2S ? (isBarrelHit ? 0.4624f : 0.8464f)                     // sigma 0.68 / 0.92
+                                  : (isBarrelHit ? 0.64f : 0.9025f);                      // sigma 0.80 / 0.95
           xerrFit *= f;
         }
         // The strip-length variance (degenerate/unmeasured for a 2S stub) enters the fit as measured.
-        float yerrFit = hh[hit].yerrLocal();
+        float_st yerrFit = hh[hit].yerrLocal();
         frame.toGlobal(xerrFit, 0, yerrFit, ge);
 
         // Fill position - for stubs: use the global position of the lower hit that is stored in the hit SoA
@@ -240,9 +242,9 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                   HitsView hh,
                                   ::reco::CAModulesConstView cm,
                                   typename caStructures::tindex_type* __restrict__ ptkids,
-                                  double* __restrict__ phits,
-                                  float* __restrict__ phits_ge,
-                                  double* __restrict__ pfast_fit,
+                                  double_st* __restrict__ phits,
+                                  float_st* __restrict__ phits_ge,
+                                  double_st* __restrict__ pfast_fit,
                                   uint32_t nHitsL,
                                   uint32_t nHitsH,
                                   int32_t offset,
@@ -298,24 +300,24 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
   // BLBFieldMap.h). The hit-average of B_bend/Bz(0,0) scales the origin scalar, with tanLambda*cos(alpha)
   // = (cx*y - cy*x)/(|R|*r) carrying q^2 = 1, so the correction is charge-free. Null bMap -> origin field.
   template <typename TAcc, typename M3xN, typename V4>
-  ALPAKA_FN_ACC ALPAKA_FN_INLINE double blEffectiveBField(
-      const TAcc& acc, const M3xN& hits, int n, const V4& fast_fit, double bField, const float* bMap) {
+  ALPAKA_FN_ACC ALPAKA_FN_INLINE double_st blEffectiveBField(
+      const TAcc& acc, const M3xN& hits, int n, const V4& fast_fit, double_st bField, const float* bMap) {
     if (bMap == nullptr)
       return bField;
-    const double cx = fast_fit(0);
-    const double cy = fast_fit(1);
-    const double absR = alpaka::math::abs(acc, fast_fit(2));
-    const double slopeDen = fast_fit(3) * absR;
-    double sSum = 0.;
+    const double_st cx = fast_fit(0);
+    const double_st cy = fast_fit(1);
+    const double_st absR = alpaka::math::abs(acc, fast_fit(2));
+    const double_st slopeDen = fast_fit(3) * absR;
+    double_st sSum = 0.;
     for (int i = 0; i < n; ++i) {
-      const double x = hits(0, i);
-      const double y = hits(1, i);
-      const double r = alpaka::math::sqrt(acc, x * x + y * y);
-      const double den = slopeDen * r;
-      const double tanLambdaCosAlpha = (den != 0.) ? -(cx * y - cy * x) / den : 0.;
+      const double_st x = hits(0, i);
+      const double_st y = hits(1, i);
+      const double_st r = alpaka::math::sqrt(acc, x * x + y * y);
+      const double_st den = slopeDen * r;
+      const double_st tanLambdaCosAlpha = (den != 0.) ? -(cx * y - cy * x) / den : static_cast<double_st>(0.);
       sSum += blBFieldMap::bBendAt(bMap, r, hits(2, i), tanLambdaCosAlpha);
     }
-    return bField * (sSum / double(n));
+    return bField * (sSum / double_st(n));
   }
 
   // Stride = the launch's concurrent-fit count (= the fit-buffer lane stride). Defaults to the global
@@ -332,13 +334,13 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
     ALPAKA_FN_ACC BL_REFIT_NOINLINE void lane(Acc1D const& acc,
                                               uint32_t local_idx,
                                               TupleMultiplicity const* __restrict__ tupleMultiplicity,
-                                              double bField,
+                                              double_st bField,
                                               OutputSoAView& results_view,
                                               typename caStructures::tindex_type const* __restrict__ ptkids,
-                                              double* __restrict__ phits,
-                                              float* __restrict__ phits_ge,
-                                              double* __restrict__ pfast_fit,
-                                              double* __restrict__ pscratch) const {
+                                              double_st* __restrict__ phits,
+                                              float_st* __restrict__ phits_ge,
+                                              double_st* __restrict__ pfast_fit,
+                                              double_st* __restrict__ pscratch) const {
       auto tkid = ptkids[local_idx];
 
       ALPAKA_ASSERT_ACC(tkid < tupleMultiplicity->capacity());
@@ -363,7 +365,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
       // the |z| falloff of Bz and the endcap radial component, i.e. the forward pT bias of a scalar field.
       // Evaluated before the fit state exists so its scalars are dead by prepareBrokenLineData's O(N) set.
       // fitCorrections_ off, or null bMap_, => scalar bField.
-      const double bFieldEff = fitCorrections_ ? blEffectiveBField(acc, hits, int(N), fast_fit, bField, bMap_) : bField;
+      const double_st bFieldEff = fitCorrections_ ? blEffectiveBField(acc, hits, int(N), fast_fit, bField, bMap_) : bField;
       // bFieldEff enters as the momentum p = bFieldEff * radius * sqrt(1+slope^2) the Highland variance is
       // divided by, as the 1/bFieldEff of copyFromCircle's geometric-curvature -> q/pT conversion, and as
       // pt = bFieldEff/|curvature|. The two fits additionally take the map itself and the field it is
@@ -403,7 +405,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
       if (fitCorrections_)
         brokenline::transportToFittedPca(acc, hits, data, bFieldEff, circle, line, bMap_, bField);
       reco::copyFromCircle(results_view, circle.par, circle.cov, line.par, line.cov, 1.f / float(bFieldEff), tkid);
-      results_view[tkid].pt() = float(bFieldEff) / float(std::abs(circle.par(2)));
+      results_view[tkid].pt() = static_cast<float_st>(bFieldEff) / static_cast<float_st>(abs(circle.par(2)));
       results_view[tkid].eta() = alpaka::math::asinh(acc, line.par(0));
       results_view[tkid].chi2() = (circle.chi2 + line.chi2) / (2 * N - 5);
       results_view[tkid].ndof() = int8_t(2 * N - 5);
@@ -424,16 +426,16 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
 
     ALPAKA_FN_ACC void operator()(Acc1D const& acc,
                                   TupleMultiplicity const* __restrict__ tupleMultiplicity,
-                                  double bField,
+                                  double_st bField,
                                   OutputSoAView results_view,
                                   typename caStructures::tindex_type const* __restrict__ ptkids,
-                                  double* __restrict__ phits,
-                                  float* __restrict__ phits_ge,
-                                  double* __restrict__ pfast_fit,
+                                  double_st* __restrict__ phits,
+                                  float_st* __restrict__ phits_ge,
+                                  double_st* __restrict__ pfast_fit,
                                   // Per-lane fit scratch: the prepared-data vectors, the shared band block and
                                   // the helper vectors of the factorized fit, held off the kernel stack frame
                                   // (the frame drives the driver's per-thread local-memory reservation).
-                                  double* __restrict__ pscratch) const {
+                                  double_st* __restrict__ pscratch) const {
       ALPAKA_ASSERT_ACC(results_view.pt().data());
       ALPAKA_ASSERT_ACC(results_view.eta().data());
       ALPAKA_ASSERT_ACC(results_view.chi2().data());
@@ -524,13 +526,13 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
       BLMainFusedCfg const& cfg,
       uint32_t lane,
       TupleMultiplicity const* __restrict__ tupleMultiplicity,
-      double bField,
+      double_st bField,
       OutputSoAView& results_view,
       typename caStructures::tindex_type const* __restrict__ ptkids,
-      double* __restrict__ phits,
-      float* __restrict__ phits_ge,
-      double* __restrict__ pfast_fit,
-      double* __restrict__ pscratch) {
+      double_st* __restrict__ phits,
+      float_st* __restrict__ phits_ge,
+      double_st* __restrict__ pfast_fit,
+      double_st* __restrict__ pscratch) {
     const Kernel_BLFit<N, TrackerTraits, Stride> k{cfg.rhoMap, cfg.bMap, cfg.fitCorrections};
     k.lane(acc, lane, tupleMultiplicity, bField, results_view, ptkids, phits, phits_ge, pfast_fit, pscratch);
   }
@@ -560,9 +562,9 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                   HitsMultiView hh,
                                   ::reco::CAModulesConstView cm,
                                   typename caStructures::tindex_type* __restrict__ ptkids,
-                                  double* __restrict__ phits,
-                                  float* __restrict__ phits_ge,
-                                  double* __restrict__ pfast_fit,
+                                  double_st* __restrict__ phits,
+                                  float_st* __restrict__ phits_ge,
+                                  double_st* __restrict__ pfast_fit,
                                   const uint32_t* __restrict__ pRange,
                                   const uint32_t* __restrict__ pBlockMap) const {
       // The per-bin kernel's entry assertions (see Kernel_BLFastFit::operator()).
@@ -635,13 +637,13 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
 
     ALPAKA_FN_ACC void operator()(Acc1D const& acc,
                                   TupleMultiplicity const* __restrict__ tupleMultiplicity,
-                                  double bField,
+                                  double_st bField,
                                   OutputSoAView results_view,
                                   typename caStructures::tindex_type const* __restrict__ ptkids,
-                                  double* __restrict__ phits,
-                                  float* __restrict__ phits_ge,
-                                  double* __restrict__ pfast_fit,
-                                  double* __restrict__ pscratch,
+                                  double_st* __restrict__ phits,
+                                  float_st* __restrict__ phits_ge,
+                                  double_st* __restrict__ pfast_fit,
+                                  double_st* __restrict__ pscratch,
                                   const uint32_t* __restrict__ pBlockMap) const {
       ALPAKA_ASSERT_ACC(results_view.pt().data());
       ALPAKA_ASSERT_ACC(results_view.eta().data());
@@ -709,10 +711,10 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
     const blMaterialMap::Map* rhoMap;
     const float* bMap;  // normalized (Bz,Br) r-z field map; null (or fitCorrections off) => the scalar bField
     typename caStructures::tindex_type* tkids;
-    double* phits;
-    float* phits_ge;
-    double* pfast_fit;
-    double* pgblScratch;
+    double_st* phits;
+    float_st* phits_ge;
+    double_st* pfast_fit;
+    double_st* pgblScratch;
     bool fitCorrections;  // fit correctness package (see Kernel_BLFit::fitCorrections_)
     // Dynamic-partition state of the fused ladder (unused on the per-bin path, which addresses the whole
     // buffer from lane 0). Both tables are written on the device by Kernel_BLMainLaneRanges, once per round.

@@ -6,6 +6,9 @@
 // to Bz(0,0), sampled on the lattice below from the MagneticField EventSetup product.
 #ifndef RecoTracker_PixelTrackFitting_BLBFieldMap_h
 #define RecoTracker_PixelTrackFitting_BLBFieldMap_h
+
+#include "Utilities/Cadna/interface/CadnaEigenTypes.h"
+
 namespace blBFieldMap {
   // Sampling lattice, uniform in r and z (5 cm r, 10 cm z), covering the tracking volume; clamped at the boundary.
   constexpr int kNR = 24;
