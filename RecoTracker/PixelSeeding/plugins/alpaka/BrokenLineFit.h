@@ -115,17 +115,17 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
     auto tkidDevice =
         cms::alpakatools::make_device_buffer<typename caStructures::tindex_type[]>(queue, maxNumberOfConcurrentFits_);
     constexpr auto maxN = TrackerTraits::maxHitsOnTrackForFullFit;
-    auto hitsDevice = cms::alpakatools::make_device_buffer<double[]>(
-        queue, maxNumberOfConcurrentFits_ * sizeof(riemannFit::Matrix3xNd<maxN>) / sizeof(double));
-    auto hits_geDevice = cms::alpakatools::make_device_buffer<float[]>(
-        queue, maxNumberOfConcurrentFits_ * sizeof(riemannFit::Matrix6xNf<maxN>) / sizeof(float));
-    auto fast_fit_resultsDevice = cms::alpakatools::make_device_buffer<double[]>(
-        queue, maxNumberOfConcurrentFits_ * sizeof(riemannFit::Vector4d) / sizeof(double));
+    auto hitsDevice = cms::alpakatools::make_device_buffer<double_st[]>(
+        queue, maxNumberOfConcurrentFits_ * sizeof(riemannFit::Matrix3xNd<maxN>) / sizeof(double_st));
+    auto hits_geDevice = cms::alpakatools::make_device_buffer<float_st[]>(
+        queue, maxNumberOfConcurrentFits_ * sizeof(riemannFit::Matrix6xNf<maxN>) / sizeof(float_st));
+    auto fast_fit_resultsDevice = cms::alpakatools::make_device_buffer<double_st[]>(
+        queue, maxNumberOfConcurrentFits_ * sizeof(riemannFit::Vector4d) / sizeof(double_st));
     // Per-fit solver scratch of the factorized fit: prepared-data + shared band block + helper vectors
     // per lane, in an [element][lane] layout whose stride is the concurrent-fit count, so it is allocated
     // at maxNumberOfConcurrentFits_ lanes (like the input buffers).
     constexpr int kScratchPerFit = brokenline::kLegacyFitScratchDoubles<int(maxN)>;
-    auto gblScratchDevice = cms::alpakatools::make_device_buffer<double[]>(
+    auto gblScratchDevice = cms::alpakatools::make_device_buffer<double_st[]>(
         queue, std::size_t(maxNumberOfConcurrentFits_) * std::size_t(kScratchPerFit));
     // The per-bin ladder is the fitNas4 arm: that mode launches the N=4 bin once per rolling index and
     // then the tail bin, which is not a partition, so it cannot be expressed as a fused launch. It is also

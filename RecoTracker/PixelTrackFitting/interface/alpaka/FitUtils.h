@@ -9,6 +9,7 @@
 #include "HeterogeneousCore/AlpakaInterface/interface/config.h"
 #include "RecoTracker/PixelTrackFitting/interface/FitResult.h"
 #include "RecoTracker/PixelTrackFitting/interface/FitUtils.h"
+#include "Utilities/Cadna/interface/CadnaEigenTypes.h"
 
 namespace ALPAKA_ACCELERATOR_NAMESPACE::riemannFit {
   using namespace ::riemannFit;
@@ -40,13 +41,13 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::riemannFit {
     \return z component of the cross product.
    */
   template <alpaka::concepts::Acc TAcc>
-  ALPAKA_FN_ACC ALPAKA_FN_INLINE double cross2D(const TAcc& acc, const Vector2d& a, const Vector2d& b) {
+  ALPAKA_FN_ACC ALPAKA_FN_INLINE double_st cross2D(const TAcc& acc, const Vector2d& a, const Vector2d& b) {
     return a.x() * b.y() - a.y() * b.x();
   }
 
   /*!
    *  load error in CMSSW format to our formalism
-   *  
+   *
    */
   template <alpaka::concepts::Acc TAcc, typename M6xNf, typename M2Nd>
   ALPAKA_FN_ACC void loadCovariance2D(const TAcc& acc, M6xNf const& ge, M2Nd& hits_cov) {
@@ -137,16 +138,16 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::riemannFit {
   template <alpaka::concepts::Acc TAcc>
   ALPAKA_FN_ACC ALPAKA_FN_INLINE void par_uvrtopak(const TAcc& acc,
                                                    CircleFit& circle,
-                                                   const double B,
+                                                   const double_st B,
                                                    const bool error) {
     Vector3d par_pak;
-    const double temp0 = circle.par.head(2).squaredNorm();
-    const double temp1 = alpaka::math::sqrt(acc, temp0);
+    const double_st temp0 = circle.par.head(2).squaredNorm();
+    const double_st temp1 = alpaka::math::sqrt(acc, temp0);
     par_pak << alpaka::math::atan2(acc, circle.qCharge * circle.par(0), -circle.qCharge * circle.par(1)),
         circle.qCharge * (temp1 - circle.par(2)), circle.par(2) * B;
     if (error) {
-      const double temp2 = sqr(circle.par(0)) * 1. / temp0;
-      const double temp3 = 1. / temp1 * circle.qCharge;
+      const double_st temp2 = sqr(circle.par(0)) * 1. / temp0;
+      const double_st temp3 = 1. / temp1 * circle.qCharge;
       Matrix3d j4Mat;
       j4Mat << -circle.par(1) * temp2 * 1. / sqr(circle.par(0)), temp2 * 1. / circle.par(0), 0., circle.par(0) * temp3,
           circle.par(1) * temp3, -circle.qCharge, 0., 0., B;
@@ -164,13 +165,13 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::riemannFit {
   template <alpaka::concepts::Acc TAcc>
   ALPAKA_FN_ACC ALPAKA_FN_INLINE void fromCircleToPerigee(const TAcc& acc, CircleFit& circle) {
     Vector3d par_pak;
-    const double temp0 = circle.par.head(2).squaredNorm();
-    const double temp1 = alpaka::math::sqrt(acc, temp0);
+    const double_st temp0 = circle.par.head(2).squaredNorm();
+    const double_st temp1 = alpaka::math::sqrt(acc, temp0);
     par_pak << alpaka::math::atan2(acc, circle.qCharge * circle.par(0), -circle.qCharge * circle.par(1)),
         circle.qCharge * (temp1 - circle.par(2)), circle.qCharge / circle.par(2);
 
-    const double temp2 = sqr(circle.par(0)) * 1. / temp0;
-    const double temp3 = 1. / temp1 * circle.qCharge;
+    const double_st temp2 = sqr(circle.par(0)) * 1. / temp0;
+    const double_st temp3 = 1. / temp1 * circle.qCharge;
     Matrix3d j4Mat;
     j4Mat << -circle.par(1) * temp2 * 1. / sqr(circle.par(0)), temp2 * 1. / circle.par(0), 0., circle.par(0) * temp3,
         circle.par(1) * temp3, -circle.qCharge, 0., 0., -circle.qCharge / (circle.par(2) * circle.par(2));

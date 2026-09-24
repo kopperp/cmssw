@@ -38,7 +38,7 @@
 #include "DataFormats/HLTReco/interface/TriggerTypeDefs.h"
 #include "DataFormats/HLTReco/interface/TriggerFilterObjectWithRefs.h"
 #include "TrackingTools/TrajectoryParametrization/interface/CurvilinearTrajectoryError.h"
-#include "RecoTracker/PixelTrackFitting/interface/FitUtils.h"
+// #include "RecoTracker/PixelTrackFitting/interface/FitUtils.h"
 #include "TrackingTools/TrajectoryParametrization/interface/GlobalTrajectoryParameters.h"
 #include "DataFormats/TrackReco/interface/HitPattern.h"
 #include "TrackingTools/AnalyticalJacobians/interface/JacobianLocalToCurvilinear.h"
@@ -616,16 +616,44 @@ void L2TauNNProducerAlpaka::selectGoodTracksAndVertices(const ZVertexHost& patav
   }
 }
 
+// transformation between the "perigee" to cmssw localcoord frame
+// the plane of the latter is the perigee plane...
+// from   //!<(phi,Tip,q/pt,cotan(theta)),Zip)
+// to q/p,dx/dz,dy/dz,x,z
+template <typename VI5, typename MI5, typename VO5, typename MO5>
+inline void transformToPerigeePlane(VI5 const& ip, MI5 const& icov, VO5& op, MO5& ocov) {
+  auto sinTheta2 = 1. / (1. + ip(3) * ip(3));
+  auto sinTheta = sqrt(sinTheta2);
+  auto cosTheta = ip(3) * sinTheta;
+
+  op(0) = sinTheta * ip(2);
+  op(1) = 0.;
+  op(2) = -ip(3);
+  op(3) = ip(1);
+  op(4) = -ip(4);
+
+  Eigen::Matrix<double, 5,5> jMat = Eigen::Matrix<double, 5,5>::Zero();
+
+  jMat(0, 2) = sinTheta;
+  jMat(0, 3) = -sinTheta2 * cosTheta * ip(2);
+  jMat(1, 0) = 1.;
+  jMat(2, 3) = -1.;
+  jMat(3, 1) = 1.;
+  jMat(4, 4) = -1;
+
+  ocov = jMat * icov * jMat.transpose();
+}
+
 std::pair<float, float> L2TauNNProducerAlpaka::impactParameter(int it,
                                                                const TracksHost& patatracks_tsoa,
                                                                float patatrackPhi,
                                                                const reco::BeamSpot& beamspot,
                                                                const MagneticField* magfi) {
   /* dxy and dz */
-  riemannFit::Vector5d ipar, opar;
-  riemannFit::Matrix5d icov, ocov;
+  Eigen::Vector<double, 5> ipar, opar;
+  Eigen::Matrix<double, 5,5> icov, ocov;
   copyToDense(patatracks_tsoa.view().tracks(), ipar, icov, it);
-  riemannFit::transformToPerigeePlane(ipar, icov, opar, ocov);
+  transformToPerigeePlane(ipar, icov, opar, ocov);
   LocalTrajectoryParameters lpar(opar(0), opar(1), opar(2), opar(3), opar(4), 1.);
   float sp = std::sin(patatrackPhi);
   float cp = std::cos(patatrackPhi);
