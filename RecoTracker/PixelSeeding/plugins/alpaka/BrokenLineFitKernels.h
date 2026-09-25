@@ -204,24 +204,36 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
         // stubs the global error is built here from the local error through that frame (OTRecHitsSoA has no
         // pre-computed global-error columns).
         auto frame = cm.innerSensorFrame(hh[hit].detectorIndex());
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         float_st xerrFit = hh[hit].xerrLocal();
+#pragma GCC diagnostic pop
         // Stub transverse-error calibration (fit input only): scale the local-x VARIANCE by the squared
         // pull width (2S barrel 0.68, PS barrel 0.80, disks 0.92/0.95) so the fit weights match the real
         // resolution. Fit-input only -- track finding is untouched.
         if (hasStubsRt && isStub(hh, int32_t(hit))) {
           const bool is2S = hh[hit].yerrLocal() > 0.1f;                                // strip vs macro-pixel
           const bool isBarrelHit = alpaka::math::abs(acc, hh[hit].zGlobal()) < 118.f;  // OT barrel vs TEDD
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
           const float_st f = is2S ? (isBarrelHit ? 0.4624f : 0.8464f)                     // sigma 0.68 / 0.92
                                   : (isBarrelHit ? 0.64f : 0.9025f);                      // sigma 0.80 / 0.95
+#pragma GCC diagnostic pop
           xerrFit *= f;
         }
         // The strip-length variance (degenerate/unmeasured for a 2S stub) enters the fit as measured.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         float_st yerrFit = hh[hit].yerrLocal();
+#pragma GCC diagnostic pop
         frame.toGlobal(xerrFit, 0, yerrFit, ge);
 
         // Fill position - for stubs: use the global position of the lower hit that is stored in the hit SoA
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         hits.col(i) << hh[hit].xGlobal(), hh[hit].yGlobal(), hh[hit].zGlobal();
         hits_ge.col(i) << ge[0], ge[1], ge[2], ge[3], ge[4], ge[5];
+#pragma GCC diagnostic pop
       }
       brokenline::fastFit(acc, hits, fast_fit);
 
@@ -308,16 +320,25 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
     const double_st cy = fast_fit(1);
     const double_st absR = alpaka::math::abs(acc, fast_fit(2));
     const double_st slopeDen = fast_fit(3) * absR;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     double_st sSum = 0.;
+#pragma GCC diagnostic pop
     for (int i = 0; i < n; ++i) {
       const double_st x = hits(0, i);
       const double_st y = hits(1, i);
       const double_st r = alpaka::math::sqrt(acc, x * x + y * y);
       const double_st den = slopeDen * r;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
       const double_st tanLambdaCosAlpha = (den != 0.) ? -(cx * y - cy * x) / den : static_cast<double_st>(0.);
+#pragma GCC diagnostic pop
       sSum += blBFieldMap::bBendAt(bMap, r, hits(2, i), tanLambdaCosAlpha);
     }
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     return bField * (sSum / double_st(n));
+#pragma GCC diagnostic pop
   }
 
   // Stride = the launch's concurrent-fit count (= the fit-buffer lane stride). Defaults to the global

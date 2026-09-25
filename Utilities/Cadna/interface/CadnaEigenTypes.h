@@ -2,7 +2,10 @@
 #define DataFormats_Cadna_CadnaEigenTypes_h
 
 #include <cadna.h>
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #include <Eigen/Core>
+#pragma GCC diagnostic pop
 
 namespace Eigen {
 
