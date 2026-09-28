@@ -47,10 +47,13 @@ namespace {
     float_st cp = cos(phi0);
     Surface::RotationType rot(sp, -cp, 0, 0, 0, -1.f, cp, sp, 0);
     Plane plane(beamSpot, rot);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     const Frame f{{beamSpot.x(), beamSpot.y(), beamSpot.z()},
                   {sin(phi0), -cos(phi0), 0.},
                   {0., 0., -1.},
                   {cos(phi0), sin(phi0), 0.}};
+#pragma GCC diagnostic pop
     auto const& r = plane.rotation();
     auto const& p = plane.position();
     const double d[12] = {p.x() - f.org[0],
@@ -119,12 +122,17 @@ namespace {
 
 int main() {
   const GlobalPoint beamSpot(0.08f, -0.03f, 1.7f);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
   const double_st tol = 1e-6;
 
   double_st worstJac = 0., worstVal = 0., worstCov = 0., worstFrame = 0.;
+#pragma GCC diagnostic pop
   int worstRow = -1, worstCol = -1;
   long nStates = 0;
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
   for (double_st phi : {-2.9, -1.2, 0., 0.7, 1.9, 3.0})
     for (double_st tip : {-5., -1.3, -0.05, 0., 0.05, 1.3, 5.})
       for (double_st pt : {0.5, 1., 5., 20.})
@@ -174,6 +182,7 @@ int main() {
                       worstCov,
                       abs(ocov(i, j) - expected(i, j)) / sqrt(expected(i, i) * expected(j, j) + 1e-300));
             }
+#pragma GCC diagnostic pop
 
   std::printf("testPerigeeJacobian: %ld states\n", nStates);
   std::printf("  max |frame - Plane built by the converters|= %.3e\n", static_cast<double>(worstFrame));

@@ -5,7 +5,10 @@
 
 #include <alpaka/alpaka.hpp>
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #include <Eigen/Core>
+#pragma GCC diagnostic pop
 
 #include "HeterogeneousCore/AlpakaInterface/interface/config.h"
 #include "RecoTracker/PixelTrackFitting/interface/alpaka/FitUtils.h"
@@ -249,22 +252,37 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
     // Next boundary crossing of each coordinate, in units of the chord parameter t in [0,1], and the
     // constant spacing between two consecutive crossings of the same family. A coordinate that does not
     // change never crosses: park it past the end of the chord.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     double_st tR = 2., dtR = 1.;
+#pragma GCC diagnostic pop
     if (dr != 0.) {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
       const double_st kNext = alpaka::math::floor(acc, r0 / double_st(blMaterialMap::kDR)) + (dr > 0. ? 1. : 0.);
       tR = (kNext * double_st(blMaterialMap::kDR) - r0) / dr;
       dtR = double_st(blMaterialMap::kDR) / alpaka::math::abs(acc, dr);
+#pragma GCC diagnostic pop
     }
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     double_st tZ = 2., dtZ = 1.;
+#pragma GCC diagnostic pop
     if (dz != 0.) {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
       const double_st kNext = alpaka::math::floor(acc, z0 / double_st(blMaterialMap::kDZ)) + (dz > 0. ? 1. : 0.);
       tZ = (kNext * double_st(blMaterialMap::kDZ) - z0) / dz;
       dtZ = double_st(blMaterialMap::kDZ) / alpaka::math::abs(acc, dz);
+#pragma GCC diagnostic pop
     }
     // One iteration per cell. The bound is never reached by a tracker segment (the longest one crosses
     // fewer than 900 cells); it only keeps a NaN or denormal input from spinning the device.
     constexpr int kMaxCells = 2048;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     double_st t = 0.;
+#pragma GCC diagnostic pop
     for (int cell = 0; cell < kMaxCells && t < 1.; ++cell) {
       double_st tn = tR < tZ ? tR : tZ;
       if (tn > 1.)
@@ -272,7 +290,10 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
       if (tn > t) {
         const double_st tm = 0.5 * (t + tn);  // midpoint: inside the cell whatever the boundary rounding
         const float_st rm = float_st(r0 + tm * dr), zm = float_st(z0 + tm * dz);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         const double_st q = blMaterialMap::rhoAt(*map, rm, zm);
+#pragma GCC diagnostic pop
         if (q > 0.f) {
           const double_st a = 1. - t, c = 1. - tn;
           W += q * (a - c) * L;
@@ -306,6 +327,8 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
   }
 
   // X/X0 of the segment (r0,z0)->(r1,z1), the walk's total. `path3D` as in segmentWalk.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
   template <alpaka::concepts::Acc TAcc>
   ALPAKA_FN_ACC ALPAKA_FN_INLINE double_st segmentXX0(const TAcc& acc,
                                                       const blMaterialMap::Map* map,
@@ -315,6 +338,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
                                                       double_st z1,
                                                       double_st path3D = 0.,
                                                       ElossColumn* col = nullptr) {
+#pragma GCC diagnostic pop
     double_st L, W, S1, S2;
     segmentWalk(acc, map, r0, z0, r1, z1, path3D, L, W, S1, S2, col);
     return W;  // dimensionless X/X0
@@ -327,6 +351,8 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
   // 1-w1 -- reproduces all three (angle variance, angle-offset covariance, offset variance at the end).
   // w1 is in (0,1] by Cauchy-Schwarz (equality for a single-atom measure) and d1 in (0,L]; the caller
   // handles those limits. Returns W.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
   template <alpaka::concepts::Acc TAcc>
   ALPAKA_FN_ACC ALPAKA_FN_INLINE double_st segmentXX0Moments(const TAcc& acc,
                                                              const blMaterialMap::Map* map,
@@ -338,6 +364,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
                                                              double_st& w1,
                                                              double_st path3D = 0.,
                                                              ElossColumn* col = nullptr) {
+#pragma GCC diagnostic pop
     double_st L, W, S1, S2;
     segmentWalk(acc, map, r0, z0, r1, z1, path3D, L, W, S1, S2, col);
     d1 = 0.;
@@ -354,6 +381,8 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
   // charging fDep*W at the departure end and (1-fDep)*W at the arrival end, with fDep = S1/(W L) = <d>/L
   // in [0,1], reproduces the segment's total and its first moment about either end exactly (a single kink
   // at the arrival node would model the first moment as zero). Returns W.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
   template <alpaka::concepts::Acc TAcc>
   ALPAKA_FN_ACC ALPAKA_FN_INLINE double_st segmentXX0Endpoint(const TAcc& acc,
                                                               const blMaterialMap::Map* map,
@@ -364,9 +393,13 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
                                                               double_st& fDep,
                                                               double_st path3D = 0.,
                                                               ElossColumn* col = nullptr) {
+#pragma GCC diagnostic pop
     double_st L, W, S1, S2;
     segmentWalk(acc, map, r0, z0, r1, z1, path3D, L, W, S1, S2, col);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     fDep = (W > 0.) ? S1 / (W * L) : double_st(0.);
+#pragma GCC diagnostic pop
     return W;
   }
 
@@ -395,6 +428,8 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
   // property of the whole path the particle crosses, not of the lump one node is charged, so a track broken
   // into many thin scatterers must keep the total in it or every kink comes out under-charged; only the
   // leading radLen stays the node's own share. Zero keeps the node's own thickness in the logarithm.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
   template <alpaka::concepts::Acc TAcc>
   ALPAKA_FN_ACC ALPAKA_FN_INLINE double_st multScatt(const TAcc& acc,
                                                      const double_st radLen,
@@ -403,8 +438,12 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
                                                      double_st slope,
                                                      bool pionBeta = false,
                                                      double_st xLogTotal = 0.) {
+#pragma GCC diagnostic pop
     if (radLen <= 0.)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
       return static_cast<double_st>(0.);
+#pragma GCC diagnostic pop
     if (pionBeta) {
       // Corrections package: full Highland theta0^2 (geometry factor 1.0), pion 1/beta, no pt cap.
       constexpr double fact = riemannFit::sqr(13.6 / 1000.);
@@ -416,7 +455,10 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
     }
     // Corrections off: upstream's multScatt exactly (geometry factor 0.7, pt capped at 20 GeV). Any deviation
     // here shifts the emitted covariances and moves the fixed high-purity selector working point.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     auto pt2 = alpaka::math::min(acc, static_cast<double_st>(20.), bField * radius);
+#pragma GCC diagnostic pop
     pt2 *= pt2;
     constexpr double fact = 0.7 * riemannFit::sqr(13.6 / 1000.);
     return fact / (pt2 * (1. + riemannFit::sqr(slope))) * radLen * riemannFit::sqr(1. + 0.038 * log(radLen));
@@ -479,8 +521,11 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
     scalar lambda = (0.5 * tempA) / (riemannFit::sqr(1. + tempU) * tempU);
     scalar mu = 1. / (tempU * (1. + tempU)) + rho * lambda;
     scalar zeta = riemannFit::sqr(deltaOrth) + riemannFit::sqr(deltaPara);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     jacobian << xi * tempSmallU * tempV, -xi * riemannFit::sqr(rho) * deltaOrth, xi * deltaPara,
         2. * mu * tempSmallU * deltaPara, 2. * mu * tempV, mu * zeta - lambda * tempA, 0, 0, 1.;
+#pragma GCC diagnostic pop
 
     // translated circle parameters
     // phi
@@ -515,6 +560,8 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
            normalized to [GeV/cm]. With both given (and fitCorrections on) the radial field's dip-angle row is
            removed from the z coordinates, see below; null map = no field row, as with corrections off.
   */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
   template <alpaka::concepts::Acc TAcc, typename M3xN, typename V4, typename TData, typename TWs, int n = TData::kN>
   ALPAKA_FN_ACC ALPAKA_FN_INLINE void __attribute__((always_inline)) prepareBrokenLineData(const TAcc& acc,
                                                                                            const M3xN& hits,
@@ -527,6 +574,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
                                                                                            bool elossGaps = false,
                                                                                            const float* bMap = nullptr,
                                                                                            double_st bFieldOrigin = 0.) {
+#pragma GCC diagnostic pop
     riemannFit::Vector2d dVec;
     riemannFit::Vector2d eVec;
     results.xx0Total = 0.;
@@ -549,7 +597,10 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
     riemannFit::Matrix2d rotMat = rotationMatrix(acc, slope);
 
     // calculate radii and s
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     results.radii = hits.block(0, 0, 2, n) - fast_fit.head(2) * riemannFit::MatrixXd::Constant(1, n, 1);
+#pragma GCC diagnostic pop
     eVec = -fast_fit(2) * fast_fit.head(2) / fast_fit.head(2).norm();
     for (u_int i = 0; i < n; i++) {
       dVec = results.radii.block(0, i, 2, 1);
@@ -591,27 +642,42 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
       const double_st cx = fast_fit(0), cy = fast_fit(1), rad = fast_fit(2);
       const double_st sec2 = 1. + riemannFit::sqr(slope);
       const double_st pTot = bField * rad * alpaka::math::sqrt(acc, sec2);  // bField = the effective bending field
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
       const double_st qbp = double_st(results.qCharge) / pTot;
+#pragma GCC diagnostic pop
       // dlambda per unit TRANSVERSE arc at a point of the reference circle (the fit's z is a function of
       // sTransverse). Only B_r is read: bBendAndBrAt with a null tanLambda*cos(alpha) leaves the bending
       // interpolation dead, rather than repeating the lattice index block a third time.
       auto lambdaRate = [&](double_st x, double_st y, double_st z) {
         const double_st r = alpaka::math::sqrt(acc, x * x + y * y);
         if (!(r > 0.))
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
           return static_cast<double_st>(0.);
         double brNorm = 0.;
+#pragma GCC diagnostic pop
         blBFieldMap::bBendAndBrAt(bMap, r, z, 0., brNorm);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         const double_st sinAlpha = -double_st(results.qCharge) * (x * (x - cx) + y * (y - cy)) / (rad * r);
+#pragma GCC diagnostic pop
         return -qbp * (bFieldOrigin * brNorm) * sinAlpha * alpaka::math::sqrt(acc, sec2);
       };
       // start at the reference PCA: the circle point closest to the beam line, z from the fitted line
       // (beamlineSegment, the same closest approach the upstream material segment starts at)
       const double_st cNorm = alpaka::math::sqrt(acc, cx * cx + cy * cy);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
       double_st zPca = 0., path0 = 0.;
+#pragma GCC diagnostic pop
       beamlineSegment(acc, hits(2, 0), slope, results.sTransverse(0), zPca, path0);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
       double_st xPrev = (cNorm > 0.) ? cx * (1. - rad / cNorm) : double_st(0.);
       double_st yPrev = (cNorm > 0.) ? cy * (1. - rad / cNorm) : double_st(0.);
       double_st zPrev = zPca, sPrev = 0., dLambda = 0., dz = 0.;
+#pragma GCC diagnostic pop
       double_st ratePrev = lambdaRate(xPrev, yPrev, zPrev);
       for (u_int i = 0; i < n; i++) {
         const double_st sCur = results.sTransverse(i);
@@ -621,11 +687,17 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
         // itself carries), so one sine and cosine per gap suffice.
         const double_st dsGap = sCur - sPrev;
         const int nSub = alpaka::math::min(acc, 4, 1 + int(alpaka::math::abs(acc, dsGap) * 0.125));
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         const double_st ds = dsGap / double_st(nSub);
         const double_st dPsi = (rad != 0.) ? -double_st(results.qCharge) * ds / rad : static_cast<double_st>(0.);
+#pragma GCC diagnostic pop
         const double_st cPsi = alpaka::math::cos(acc, dPsi), sPsi = alpaka::math::sin(acc, dPsi);
         double_st rx = xPrev - cx, ry = yPrev - cy;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         const double_st dzSub = (hits(2, i) - zPrev) / double_st(nSub);
+#pragma GCC diagnostic pop
         double_st zSub = zPrev;
         for (int k = 0; k < nSub; ++k) {
           const double_st rxNew = rx * cPsi - ry * sPsi, ryNew = rx * sPsi + ry * cPsi;
@@ -667,9 +739,12 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
     results.node0XX0 = 0.;
     results.innerD1 = 0.;
     results.innerW1 = 0.;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     double_st xx0Run = 0.;  // the gaps' material, summed as the walk produces it
     // Geometry of the beamline->hit-0 segment, shared by the scattering term and the ionization column.
     double_st zPca = 0., path0 = 0.;
+#pragma GCC diagnostic pop
     if (fitCorrections)
       beamlineSegment(acc, hits(2, 0), slope, results.sTransverse(0), zPca, path0);
     if (fitCorrections) {
@@ -678,14 +753,23 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
       // The ionization column of the upstream segment is needed before the gaps, as the first lump of the
       // running column; the segment itself is the same one the scattering term uses (see below).
       ElossColumn colRun;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
       double_st pTot = 0.;
+#pragma GCC diagnostic pop
       if (elossGaps) {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         results.innerXX0 =
             segmentXX0Moments(acc, map, 0., zPca, rOf(0), hits(2, 0), results.innerD1, results.innerW1, path0, &colRun);
+#pragma GCC diagnostic pop
         pTot = alpaka::math::sqrt(acc, riemannFit::sqr(bField * fast_fit(2)) * (1. + riemannFit::sqr(slope)));
       }
       for (u_int g = 0; g < n - 1; g++) {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         double_st fDep = 0.5;  // overwritten by segmentXX0Endpoint (uniform density => lever L/2)
+#pragma GCC diagnostic pop
         // the gap's 3-D path, the length the map's density is defined per (the chord is shorter)
         const double_st path = alpaka::math::abs(acc, results.sTotal(g + 1) - results.sTotal(g));
         ElossColumn colGap;
@@ -729,8 +813,11 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
     // applies the same rule. The segment's moments (innerD1, innerW1) place the scatterer where the material is.
     if (fitCorrections) {
       if (!elossGaps)  // with elossGaps the same walk already ran, one lump earlier
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         results.innerXX0 =
             segmentXX0Moments(acc, map, 0., zPca, rOf(0), hits(2, 0), results.innerD1, results.innerW1, path0);
+#pragma GCC diagnostic pop
     } else {
       // Corrections OFF: upstream adds the innermost multiple-scattering term from the FIRST GAP's
       // length -- multScatt(sTotal(1) - sTotal(0), ...) -- not from a beamline material integral.
@@ -740,7 +827,10 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
     // Everything the track crosses, the upstream segment plus every gap. Highland's logarithm belongs to
     // that total and not to the lump a single node is charged, so both fits evaluate it there: an
     // outer-tracker track broken into six thin scatterers otherwise loses a tenth of its kink angles.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     results.xx0Total = fitCorrections ? results.innerXX0 + xx0Run : double_st(0.);
+#pragma GCC diagnostic pop
     //calculate varBeta
     results.varBeta(0) = results.varBeta(n - 1) = 0;
     for (u_int i = 1; i < n - 1; i++) {
@@ -757,8 +847,11 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
           results.varBeta(i) = std::numeric_limits<float>::max();
         }
       } else {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         results.varBeta(i) = multScatt(acc, results.matXX0(i), bField, fast_fit(2), slope) +
                              multScatt(acc, results.matXX0(i - 1), bField, fast_fit(2), slope);
+#pragma GCC diagnostic pop
       }
     }
   }
@@ -858,7 +951,10 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
       Mb[(i * 3) * lstride] = d;  // M(i,i)
 
       if (i + 1 < n) {  // M(i, i+1) = M(i+1, i), stored lower-packed at row i+1 offset 1
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         double_st o1 = 0.;
+#pragma GCC diagnostic pop
         if (i > 0 && i < n - 1)
           o1 = 1. / (varBeta(i) * (sTotal(i + 1) - sTotal(i))) *
                (-(sTotal(i + 1) - sTotal(i - 1)) / ((sTotal(i + 1) - sTotal(i)) * (sTotal(i) - sTotal(i - 1))));
@@ -881,9 +977,15 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
                                                           const VB& varBeta,
                                                           double_st* cbor,
                                                           int lstride) {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     double_st corner = 0.;
+#pragma GCC diagnostic pop
     for (u_int i = 0; i < n; i++) {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
       double_st b = 0.;
+#pragma GCC diagnostic pop
       if (i > 0 && i < n - 1)
         b += -(sTransverse(i + 1) - sTransverse(i - 1)) * (sTransverse(i + 1) - sTransverse(i - 1)) /
              (2. * varBeta(i) * (sTransverse(i + 1) - sTransverse(i)) * (sTransverse(i) - sTransverse(i - 1)));
@@ -979,6 +1081,8 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
    * in which the first hit is the origin) and then the parameters and their
    * covariance matrix are transformed to the original coordinate system.
   */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
   template <alpaka::concepts::Acc TAcc,
             typename M3xN,
             typename M6xN,
@@ -998,6 +1102,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
                                                 bool elossGaps = false,
                                                 const float* bMap = nullptr,
                                                 double_st bFieldOrigin = 0.) {
+#pragma GCC diagnostic pop
     circle_results.qCharge = data.qCharge;
     auto& radii = data.radii;
     const auto& sTransverse = data.sTransverse;
@@ -1030,17 +1135,26 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
       // B_bend(r,z)/bField - 1 at a node: the local bending field's departure from the effective one.
       auto bDevAt = [&](u_int i) {
         if (!field)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
           return static_cast<double_st>(0.);
+#pragma GCC diagnostic pop
         const double_st x = hits(0, i), y = hits(1, i);
         const double_st r = alpaka::math::sqrt(acc, x * x + y * y);
         const double_st den = slopeDen * r;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         const double_st tanLambdaCosAlpha = (den != 0.) ? -(cx * y - cy * x) / den : double_st(0.);
+#pragma GCC diagnostic pop
         return bFieldOrigin * blBFieldMap::bBendAt(bMap, r, hits(2, i), tanLambdaCosAlpha) / bField - 1.;
       };
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
       double_st eCur = eloss ? uEloss(0) : static_cast<double_st>(0.);  // gap 0's loss; read BEFORE slot 0 is overwritten
       double_st bPrev = bDevAt(0);
       double_st du = 0., dup = 0.;
       uEloss(0) = 0.;  // the anchor
+#pragma GCC diagnostic pop
       for (u_int k = 0; k + 1 < n; ++k) {
         const double_st ds = sTransverse(k + 1) - sTransverse(k);
         const double_st bCur = bDevAt(k + 1);
@@ -1094,7 +1208,10 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
     static_assert(kLegacyBandBlockDoubles<n> == 6 * n + 1,
                   "band block [Mb 3n | cbor n | corner 1 | w n | ms n] shared by lineFit (Mb only) and circleFit; "
                   "the shared Mb requires lineFit to run (and read out) before circleFit rebuilds it");
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     double_st schur = 0.;  // held from the primary solve to the covariance extraction below
+#pragma GCC diagnostic pop
     auto& uVec = fitWs.circleU;
     {
       const int ls = fitWs.laneStride;
@@ -1112,7 +1229,10 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
       for (u_int i = 0; i < n; i++)
         schur -= cbor[i * ls] * wcol[i * ls];  // schur = corner - cbor^T M^-1 cbor
       // uVec = A^-1 r_uVec: border x_n = (r_n - w^T rb)/schur, band x = M^-1 rb - w x_n.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
       double_st dot = 0.;
+#pragma GCC diagnostic pop
       for (u_int i = 0; i < n; i++) {
         msc[i * ls] = r_uVec(i);
         dot += wcol[i * ls] * r_uVec(i);
@@ -1160,11 +1280,14 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
     tmp2 = 1. / tmp2;
 
     riemannFit::Matrix3d jacobian;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     jacobian << (radii(1, 0) * eMinusd(0) - eMinusd(1) * radii(0, 0)) * tmp1,
         (radii(1, mref) * eMinusd(0) - eMinusd(1) * radii(0, mref)) * tmp1, 0,
         circle_results.qCharge * (eMinusd(0) * radii(0, 0) + eMinusd(1) * radii(1, 0)) * tmp2,
         circle_results.qCharge * (eMinusd(0) * radii(0, mref) + eMinusd(1) * radii(1, mref)) * tmp2, 0, 0, 0,
         circle_results.qCharge;
+#pragma GCC diagnostic pop
 
     // Raw (0, mref, n)^2 = (phi, d, k) block of A^-1. Selected-element extraction via the Schur formula: for band
     // indices g,h in {0,mref}, A^-1(g,h) = M^-1(g,h) + w(g) w(h)/schur; A^-1(g,n) = -w(g)/schur; A^-1(n,n) =
@@ -1231,7 +1354,10 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
       const double_st sph = alpaka::math::sin(acc, circle_results.par(0));
       riemannFit::Matrix3d fisher = riemannFit::Matrix3d::Zero();
       for (u_int i = 0; i < n; i++) {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         const double_st xx = static_cast<double_st>(hits_ge.col(i)[0]), xy = static_cast<double_st>(hits_ge.col(i)[1]), yy = static_cast<double_st>(hits_ge.col(i)[2]);
+#pragma GCC diagnostic pop
         const double_st sv2 = sph * sph * xx - 2. * sph * cph * xy + cph * cph * yy;  // track-perpendicular (rphi) var
         if (!(sv2 > 0.))
           continue;
@@ -1242,15 +1368,21 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
         // mirror: same diagonal, opposite sign of the (phi,d0) and (phi,rho) entries that cov(1) = covPhiDxy
         // carries to the consumers.)
         constexpr double gs = -1.;  // Karimaki-convention basis
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         const double_st g[3] = {u, gs, gs * 0.5 * u * u};
+#pragma GCC diagnostic pop
         for (int a = 0; a < 3; ++a)
           for (int b = 0; b < 3; ++b)
             fisher(a, b) += w * g[a] * g[b];
       }
       if (alpaka::math::abs(acc, fisher.determinant()) > 0.) {
         riemannFit::Matrix3d fcov;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         // math::cholesky::invert(fisher, fcov);
         math::cholesky::invert(static_cast<Eigen::Matrix<double, 3, 3>>(fisher), fcov);
+#pragma GCC diagnostic pop
         // C_L^MSoff: re-build the band with the kinks frozen (varBeta -> ~0 => rigid), re-invert, re-extract.
         constexpr double kMSoff = 1.e-6;
         auto& varBetaOff = fitWs.varBetaOff;
@@ -1524,6 +1656,8 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
     Value only, as the field rows are: the covariances are the ones the two fits built, the curvature and the
     dip angle are untouched, and every offset is identically zero in a uniform field.
   */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
   template <alpaka::concepts::Acc TAcc, typename M3xN, typename TData>
   ALPAKA_FN_ACC ALPAKA_FN_INLINE void transportToFittedPca(const TAcc& acc,
                                                            const M3xN& hits,
@@ -1533,10 +1667,14 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
                                                            riemannFit::LineFit& line_results,
                                                            const float* bMap = nullptr,
                                                            double_st bFieldOrigin = 0.) {
+#pragma GCC diagnostic pop
     const double_st kFit = circle_results.par(2);
     if (!(alpaka::math::abs(acc, kFit) > 0.))
       return;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     const double_st qCharge = double_st(data.qCharge);
+#pragma GCC diagnostic pop
     const double_st radFit = 1. / alpaka::math::abs(acc, kFit);
     // perigee = d * mVec and centre = (d + q R) * mVec, so the perigee's radius vector is -q R mVec
     const double_st mx = alpaka::math::sin(acc, circle_results.par(0));
@@ -1548,7 +1686,10 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
     // arc of hit 0 from the fitted perigee, in prepareBrokenLineData's own convention (q R times the
     // angle from the perigee's radius vector to the hit's)
     const double_st sFit = qCharge * radFit * alpaka::math::atan2(acc, dx * ey - dy * ex, dx * ex + dy * ey);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     double_st dsArc = 0.;  // the arc the trajectory spends over the lever, minus the fitted circle's
+#pragma GCC diagnostic pop
     if (bMap != nullptr && bFieldOrigin > 0. && bField > 0.) {
       const double_st cot = line_results.par(0);
       // the local curvature's departure from the fitted one, dkappa = (B_bend(r,z)/bField - 1)/R, with the
@@ -1556,7 +1697,10 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
       auto dKappaAt = [&](double_st x, double_st y, double_st z) {
         const double_st r = alpaka::math::sqrt(acc, x * x + y * y);
         if (!(r > 0.))
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
           return static_cast<double_st>(0.);
+#pragma GCC diagnostic pop
         const double_st tanLambdaCosAlpha = cot * qCharge * (cx * y - cy * x) / (radFit * r);
         return (bFieldOrigin * blBFieldMap::bBendAt(bMap, r, z, tanLambdaCosAlpha) / bField - 1.) / radFit;
       };
@@ -1565,11 +1709,17 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
       // (hit 0 is inside r = 115 cm); it only keeps a NaN input from spinning the device.
       constexpr int kMaxSub = 32;
       const int nSub = alpaka::math::min(acc, kMaxSub, 1 + int(alpaka::math::abs(acc, sFit) * blBFieldMap::kInvDR));
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
       const double_st ds = -sFit / double_st(nSub);      // walking inwards, hit 0 -> perigee
+#pragma GCC diagnostic pop
       const double_st dPsi = -qCharge * ds / radFit;  // the radius vector turns by -q ds/R, the arc convention
       const double_st cPsi = alpaka::math::cos(acc, dPsi), sPsi = alpaka::math::sin(acc, dPsi);
       double_st rx = dx, ry = dy, zCur = hits(2, 0);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
       double_st uOff = 0., uSlope = 0., uInt = 0.;
+#pragma GCC diagnostic pop
       double_st ratePrev = dKappaAt(hits(0, 0), hits(1, 0), zCur);
       for (int k = 0; k < nSub; ++k) {
         const double_st rxNew = rx * cPsi - ry * sPsi, ryNew = rx * sPsi + ry * cPsi;
@@ -1585,7 +1735,10 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::brokenline {
         ratePrev = rateCur;
       }
       const double_st aCentre = alpaka::math::abs(acc, cFit);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
       const double_st sPca = (aCentre > 0.) ? qCharge * uSlope * circle_results.par(1) * radFit / aCentre : double_st(0.);
+#pragma GCC diagnostic pop
       dsArc = -sPca - uInt / radFit;  // uInt was accumulated inwards, the arc stretch runs outwards
       circle_results.par(1) -= qCharge * uOff;
       constexpr double kPi = 3.14159265358979323846;  // M_PI may be undefined in device compilation

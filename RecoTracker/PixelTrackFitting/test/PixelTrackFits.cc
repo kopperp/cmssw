@@ -125,7 +125,10 @@ hits_gen Hits_gen(const unsigned int& n, const Matrix<double_st, 6, 1>& gen_par)
 
   for (unsigned int i = 0; i < n; ++i) {
     const double_st a = gen_par(4);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     const double_st b = rad[i];
+#pragma GCC diagnostic pop
     const double_st c = sqrt(riemannFit::sqr(x2) + riemannFit::sqr(y2));
     const double_st beta = acos((riemannFit::sqr(a) - riemannFit::sqr(b) - riemannFit::sqr(c)) / (-2. * b * c));
     const double_st gamma = alpha + beta;
@@ -139,7 +142,10 @@ hits_gen Hits_gen(const unsigned int& n, const Matrix<double_st, 6, 1>& gen_par)
             gen_par(4);
     // isbarrel(i) = ??
     Vector5d err;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     err << R_err[i], Rp_err[i], z_err[i], 0, 0;
+#pragma GCC diagnostic pop
     smearing(err, true, gen.hits(0, i), gen.hits(1, i), gen.hits(2, i));
     Hits_cov(gen.hits_ge, i, n, gen.hits, err, true);
   }
@@ -290,11 +296,14 @@ void computePull(std::array<Fit, N>& fit, const char* label, int n_, int iterati
             << sqrt(score.row(39).array().abs2().mean() - score.row(39).mean() * score.row(39).mean()) << std::endl;
 
   Matrix5d correlation;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
   correlation << 1., score.row(21).mean(), score.row(22).mean(), score.row(15).mean(), score.row(20).mean(),
       score.row(21).mean(), 1., score.row(23).mean(), score.row(16).mean(), score.row(19).mean(), score.row(22).mean(),
       score.row(23).mean(), 1., score.row(17).mean(), score.row(20).mean(), score.row(15).mean(), score.row(16).mean(),
       score.row(17).mean(), 1., score.row(24).mean(), score.row(18).mean(), score.row(19).mean(), score.row(20).mean(),
       score.row(24).mean(), 1.;
+#pragma GCC diagnostic pop
 
   cout << "\n"
        << label << " PULLS (mean, sigma, relative_error):\n"
@@ -337,7 +346,10 @@ void computePull(std::array<Fit, N>& fit, const char* label, int n_, int iterati
 
 void test_helix_fit(bool getcin) {
   int n_;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
   const double_st B_field = 3.8 * c_speed / pow(10, 9) / 100;
+#pragma GCC diagnostic pop
   Matrix<double_st, 6, 1> gen_par;
   Vector5d true_par;
   generator.seed(1);
