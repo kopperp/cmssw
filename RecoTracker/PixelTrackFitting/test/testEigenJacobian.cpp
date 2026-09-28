@@ -60,9 +60,15 @@ int main() {
     for (auto szip = -1; szip < 2; szip += 2)
       for (auto stip = -1; stip < 2; stip += 2) {
         Vector5d par0;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         par0 << 0.2, 0.1, 3.5, 0.8, 0.1;
+#pragma GCC diagnostic pop
         Vector5d del0;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         del0 << 0.01, 0.01, 0.035, -0.03, -0.01;
+#pragma GCC diagnostic pop
         //!<(phi,Tip,pt,cotan(theta)),Zip)
         par0(1) *= stip;
         par0(4) *= szip;

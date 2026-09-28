@@ -4,8 +4,11 @@
 #include <cmath>
 #include <cstdint>
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #include <Eigen/Core>
 #include <Eigen/Eigenvalues>
+#pragma GCC diagnostic pop
 
 #include "Utilities/Cadna/interface/CadnaEigenTypes.h"
 

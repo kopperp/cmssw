@@ -1,7 +1,10 @@
 #include <iostream>
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #include <Eigen/Core>
 #include <Eigen/Eigenvalues>
+#pragma GCC diagnostic pop
 
 #ifdef USE_BL
 #include "RecoTracker/PixelTrackFitting/interface/BrokenLine.h"
@@ -51,6 +54,8 @@ template <typename M3xN, typename M6xN>
 void fillHitsAndHitsCov(M3xN& hits, M6xN& hits_ge) {
   constexpr uint32_t N = M3xN::ColsAtCompileTime;
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
   if (N == 5) {
     hits << 2.934787, 6.314229, 8.936963, 10.360559, 12.856387, 0.773211, 1.816356, 2.765734, 3.330824, 4.422212,
         -10.980247, -23.162731, -32.759060, -38.061260, -47.518867;
@@ -87,11 +92,16 @@ void fillHitsAndHitsCov(M3xN& hits, M6xN& hits_ge) {
   hits_ge.col(2)[1] = -6.24945e-07;
   if (N > 3)
     hits_ge.col(3)[1] = -5.28e-06;
+#pragma GCC diagnostic pop
 }
 
 template <int N>
 void testFit() {
   constexpr double B = 0.0113921;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+  const double_st B_st = static_cast<double_st>(B);
+#pragma GCC diagnostic pop
   riemannFit::Matrix3xNd<N> hits;
   riemannFit::Matrix6xNf<N> hits_ge = MatrixXf::Zero(6, N);
 
@@ -124,12 +134,15 @@ void testFit() {
   brokenline::karimaki_circle_fit circle_fit_results;
   riemannFit::Matrix3d Jacob;
 
-  brokenline::prepareBrokenLineData(hits, fast_fit_results, B, data);
+  brokenline::prepareBrokenLineData(hits, fast_fit_results, B_st, data);
   riemannFit::LineFit line_fit_results;
-  brokenline::lineFit(hits_ge, fast_fit_results, B, data, line_fit_results);
-  brokenline::circleFit(hits, hits_ge, fast_fit_results, B, data, circle_fit_results);
+  brokenline::lineFit(hits_ge, fast_fit_results, B_st, data, line_fit_results);
+  brokenline::circleFit(hits, hits_ge, fast_fit_results, B_st, data, circle_fit_results);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
   Jacob << 1., 0, 0, 0, 1., 0, 0, 0,
       -B / copysign(riemannFit::sqr(circle_fit_results.par(2)), circle_fit_results.par(2));
+#pragma GCC diagnostic pop
   circle_fit_results.par(2) = B / abs(circle_fit_results.par(2));
   circle_fit_results.cov = Jacob * circle_fit_results.cov * Jacob.transpose();
 #else
@@ -137,11 +150,11 @@ void testFit() {
   riemannFit::Matrix2Nd<N> hits_cov = riemannFit::Matrix2Nd<N>::Zero();
   riemannFit::loadCovariance2D(hits_ge, hits_cov);
   riemannFit::CircleFit circle_fit_results =
-      riemannFit::circleFit(hits.block(0, 0, 2, N), hits_cov, fast_fit_results, rad, B, true);
+      riemannFit::circleFit(hits.block(0, 0, 2, N), hits_cov, fast_fit_results, rad, B_st, true);
   // LINE_FIT CPU
   riemannFit::LineFit line_fit_results =
-      riemannFit::lineFit(hits, hits_ge, circle_fit_results, fast_fit_results, B, true);
-  riemannFit::par_uvrtopak(circle_fit_results, B, true);
+      riemannFit::lineFit(hits, hits_ge, circle_fit_results, fast_fit_results, B_st, true);
+  riemannFit::par_uvrtopak(circle_fit_results, B_st, true);
 
 #endif
 

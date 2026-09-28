@@ -1,7 +1,10 @@
 #ifndef DataFormats_TrackingRecHitSoA_interface_TrackingRecHitsSoA_h
 #define DataFormats_TrackingRecHitSoA_interface_TrackingRecHitsSoA_h
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #include <Eigen/Dense>
+#pragma GCC diagnostic pop
 
 #include "DataFormats/SoATemplate/interface/SoALayout.h"
 #include "DataFormats/SoATemplate/interface/SoABlocks.h"

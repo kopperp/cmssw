@@ -85,8 +85,11 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
 
           cm.innerSensorFrame(hh[hit].detectorIndex()).toGlobal(hh[hit].xerrLocal(), 0, hh[hit].yerrLocal(), ge);
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
           hits.col(i) << hh[hit].xGlobal(), hh[hit].yGlobal(), hh[hit].zGlobal();
           hits_ge.col(i) << ge[0], ge[1], ge[2], ge[3], ge[4], ge[5];
+#pragma GCC diagnostic pop
         }
         riemannFit::fastFit(acc, hits, fast_fit);
 

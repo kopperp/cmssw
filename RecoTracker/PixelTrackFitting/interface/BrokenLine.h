@@ -1,8 +1,11 @@
 #ifndef RecoTracker_PixelTrackFitting_BrokenLine_h
 #define RecoTracker_PixelTrackFitting_BrokenLine_h
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #include <Eigen/Core>
 #include <Eigen/Eigenvalues>
+#pragma GCC diagnostic pop
 
 #include "RecoTracker/PixelTrackFitting/interface/FitUtils.h"
 #include "Utilities/Cadna/interface/CadnaEigenTypes.h"
@@ -121,8 +124,11 @@ namespace brokenline {
     scalar lambda = (0.5 * tempA) / (riemannFit::sqr(1. + tempU) * tempU);
     scalar mu = 1. / (tempU * (1. + tempU)) + rho * lambda;
     scalar zeta = riemannFit::sqr(deltaOrth) + riemannFit::sqr(deltaPara);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     jacobian << xi * tempSmallU * tempV, -xi * riemannFit::sqr(rho) * deltaOrth, xi * deltaPara,
         2. * mu * tempSmallU * deltaPara, 2. * mu * tempV, mu * zeta - lambda * tempA, 0, 0, 1.;
+#pragma GCC diagnostic pop
 
     // translated circle parameters
     // phi
@@ -170,7 +176,10 @@ namespace brokenline {
     riemannFit::Matrix2d rotMat = rotationMatrix(slope);
 
     // calculate radii and s
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     results.radii = hits.block(0, 0, 2, n) - fast_fit.head(2) * riemannFit::MatrixXd::Constant(1, n, 1);
+#pragma GCC diagnostic pop
     eVec = -fast_fit(2) * fast_fit.head(2) / fast_fit.head(2).norm();
     for (u_int i = 0; i < n; i++) {
       dVec = results.radii.block(0, i, 2, 1);
@@ -399,11 +408,14 @@ namespace brokenline {
     tmp2 = 1. / tmp2;
 
     riemannFit::Matrix3d jacobian;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     jacobian << (radii(1, 0) * eMinusd(0) - eMinusd(1) * radii(0, 0)) * tmp1,
         (radii(1, 1) * eMinusd(0) - eMinusd(1) * radii(0, 1)) * tmp1, 0,
         circle_results.qCharge * (eMinusd(0) * radii(0, 0) + eMinusd(1) * radii(1, 0)) * tmp2,
         circle_results.qCharge * (eMinusd(0) * radii(0, 1) + eMinusd(1) * radii(1, 1)) * tmp2, 0, 0, 0,
         circle_results.qCharge;
+#pragma GCC diagnostic pop
 
     circle_results.cov << iMat(0, 0), iMat(0, 1), iMat(0, n), iMat(1, 0), iMat(1, 1), iMat(1, n), iMat(n, 0),
         iMat(n, 1), iMat(n, n);
@@ -596,8 +608,11 @@ namespace brokenline {
     circleFit(hits, hits_ge, fast_fit, bField, data, circle);
 
     // the circle fit gives k, but here we want p_t, so let's change the parameter and the covariance matrix
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     jacobian << 1., 0, 0, 0, 1., 0, 0, 0,
         -abs(circle.par(2)) * bField / (riemannFit::sqr(circle.par(2)) * circle.par(2));
+#pragma GCC diagnostic pop
     circle.par(2) = bField / abs(circle.par(2));
     circle.cov = jacobian * circle.cov * jacobian.transpose();
 

@@ -54,11 +54,17 @@ namespace {
   std::array<double_st, 3> bFieldAt(const float* map, const std::array<double_st, 3>& p) {
     const double_st r = hypot(p[0], p[1]);
     double brNorm = 0.;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     const double_st bz = blBFieldMap::bBendAndBrAt(map, r, p[2], 0., brNorm) * kBzOrigin;
     const double_st br = brNorm * kBzOrigin;
+#pragma GCC diagnostic pop
     if (r > 0.)
       return {br * p[0] / r, br * p[1] / r, bz};
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     return {0., 0., bz};
+#pragma GCC diagnostic pop
   }
 
   // ------------------------------------------------------------------------------- the sampled surfaces
@@ -104,7 +110,10 @@ namespace {
   //!< Highland planar angle for a thickness x = X/X0 at momentum p (pion), as the fit models it.
   double_st theta0Of(double_st x, double_st p) {
     if (!(x > 0.))
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
       return 0.;
+#pragma GCC diagnostic pop
     constexpr double kMassPion = 0.13957;
     const double_st beta = p / sqrt(p * p + kMassPion * kMassPion);
     return 13.6e-3 / (beta * p) * sqrt(x) * (1. + 0.038 * log(x));
@@ -124,11 +133,17 @@ namespace {
     const double_st tanl = sinh(eta);
     const double_st p = pT * cosh(eta);
     const double_st invn = 1. / sqrt(1. + tanl * tanl);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     std::array<double_st, 3> pos = {0., 0., 0.};
     std::array<double_st, 3> dir = {invn, 0., tanl * invn};  // phi0 = 0
     const double_st ds = 0.2;
+#pragma GCC diagnostic pop
     int nHit = 0;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     double_st xCluster = 0.;  // running X/X0 of the material cluster being crossed
+#pragma GCC diagnostic pop
     std::normal_distribution<double> gauss(0., 1.);
     for (int step = 0; step < 4000 && nHit < nWanted; ++step) {
       const auto prev = pos;
@@ -165,7 +180,10 @@ namespace {
       // multiple scattering: one kink per contiguous material cluster, Highland at the cluster's thickness
       if (rng != nullptr) {
         const double_st rr = hypot(pos[0], pos[1]);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         const double_st density = blMaterialMap::rhoAt(*rho, float(rr), float(pos[2]));
+#pragma GCC diagnostic pop
         xCluster += density * ds;
         // one Highland kink per crossed layer (the map's air, 3.3e-5 per cm, is charged in lumps of the
         // same size so that its total is not lost): thickness collected, then spent when the dense
@@ -175,13 +193,22 @@ namespace {
           const double_st th0 = theta0Of(xCluster, p);
           xCluster = 0.;
           // two independent planar kinks in the plane transverse to the direction
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
           std::array<double_st, 3> u = {-dir[1], dir[0], 0.};
+#pragma GCC diagnostic pop
           const double_st un = hypot(u[0], u[1]);
           for (int i = 0; i < 3; ++i)
             u[i] /= un;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
           const std::array<double_st, 3> v = {-dir[2] * u[1], dir[2] * u[0], dir[0] * u[1] - dir[1] * u[0]};
+#pragma GCC diagnostic pop
           const double_st a = th0 * gauss(*rng), b = th0 * gauss(*rng);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
           double_st nn = 0.;
+#pragma GCC diagnostic pop
           for (int i = 0; i < 3; ++i) {
             dir[i] += a * u[i] + b * v[i];
             nn += dir[i] * dir[i];
@@ -216,7 +243,10 @@ namespace {
         if (otOnly && dc.rMax < 30.)
           continue;
         for (int sgn = -1; sgn <= 1; sgn += 2) {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
           const double_st zt = sgn * dc.z;
+#pragma GCC diagnostic pop
           if ((prev[2] - zt) * (pos[2] - zt) < 0.) {
             const double_st f = (zt - prev[2]) / (pos[2] - prev[2]);
             const double_st x = prev[0] + f * (pos[0] - prev[0]), y = prev[1] + f * (pos[1] - prev[1]);
@@ -247,14 +277,23 @@ namespace {
                                                         double_st b,
                                                         const float* map) {
     const double_st absR = alpaka::math::abs(acc, ff(2));
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     double_st sum = 0.;
+#pragma GCC diagnostic pop
     for (int i = 0; i < NH; ++i) {
       const double_st r = alpaka::math::sqrt(acc, hits(0, i) * hits(0, i) + hits(1, i) * hits(1, i));
       const double_st den = ff(3) * absR * r;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
       const double_st tlca = (den != 0.) ? -(ff(0) * hits(1, i) - ff(1) * hits(0, i)) / den : double_st(0.);
+#pragma GCC diagnostic pop
       sum += blBFieldMap::bBendAt(map, r, hits(2, i), tlca);
     }
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     return b * sum / double_st(NH);
+#pragma GCC diagnostic pop
   }
 
   template <int NH>
@@ -279,15 +318,22 @@ namespace {
         }
         Eigen::Vector<double_st, 4> ff;
         bld::fastFit(acc, hits, ff);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         const double_st bEff = (v == 2) ? static_cast<double_st>(kBzOrigin) : effectiveBField<NH>(acc, hits, ff, kBzOrigin, map);
+#pragma GCC diagnostic pop
         const float* fitMap = (v == 0) ? nullptr : map;
         double_st* mine = scratch + std::size_t(j) * std::size_t(bld::kLegacyFitScratchDoubles<NH>);
         bld::PreparedBrokenLineDataMap<NH, 1> data(mine);
         bld::LegacyFitWorkspaceMap<NH, 1> fitWs(mine + bld::kPreparedDataDoubles<NH>);
         bld::karimaki_circle_fit circle;
         ::riemannFit::LineFit line;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+        const double_st kBzOrigin_st = static_cast<double_st>(kBzOrigin);
+#pragma GCC diagnostic pop
         bld::prepareBrokenLineData(
-            acc, hits, ff, bEff, rho, data, fitWs, /*fitCorrections=*/true, /*elossGaps=*/true, fitMap, kBzOrigin);
+            acc, hits, ff, bEff, rho, data, fitWs, /*fitCorrections=*/true, /*elossGaps=*/true, fitMap, kBzOrigin_st);
         bld::lineFit(acc, hits_ge, ff, bEff, data, line, fitWs, /*fitCorrections=*/true);
         bld::circleFit(acc,
                        hits,
@@ -300,11 +346,14 @@ namespace {
                        /*fitCorrections=*/true,
                        /*elossGaps=*/false,
                        fitMap,
-                       kBzOrigin);
+                       kBzOrigin_st);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         if (v == 3)  // the single-pass reference's own bias: the state belongs at the FITTED circle's perigee
           bld::transportToFittedPca(acc, hits, data, bEff, circle, line);
         else if (v == 4)  // and the trajectory is not that circle either, over the lever inside hit 0
-          bld::transportToFittedPca(acc, hits, data, bEff, circle, line, fitMap, kBzOrigin);
+          bld::transportToFittedPca(acc, hits, data, bEff, circle, line, fitMap, kBzOrigin_st);
+#pragma GCC diagnostic pop
         double_st* o = out + std::size_t(j) * kOut;
         o[0] = line.par(0);  // cot(theta)
         o[1] = line.par(1);  // z0 (zip)
@@ -333,11 +382,14 @@ namespace {
   template <int NH>
   void runLayout(Queue& queue, const float* map, const blMaterialMap::Map* rho, bool otOnly, const char* label) {
     std::vector<Config> cfgs;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     for (double_st pT : {1., 3., 10.})
       for (double_st aeta : {1.0, 1.5, 1.7, 2.3})
         for (int zs : {+1, -1})
           for (int q : {+1, -1})
             cfgs.push_back({pT, zs * aeta, q});
+#pragma GCC diagnostic pop
     std::vector<Track> tracks;
     std::vector<Config> kept;
     for (auto const& c : cfgs) {
@@ -352,10 +404,13 @@ namespace {
     std::mt19937_64 rng(20260913);
     std::normal_distribution<double> gauss(0., 1.);
     std::vector<Config> pullCfg;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     for (double_st pT : {1., 3.})
       for (double_st aeta : {1.0, 1.5, 2.3})
         for (int zs : {+1, -1})
           pullCfg.push_back({pT, zs * aeta, +1});
+#pragma GCC diagnostic pop
     std::vector<int> pullIndex;
     for (auto const& c : pullCfg) {
       pullIndex.push_back(int(tracks.size()));
@@ -375,7 +430,10 @@ namespace {
     const int nTracks = int(tracks.size());
 
     std::vector<double_st> hitsHost(std::size_t(nTracks) * 3 * NH);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     std::vector<float_st> geHost(std::size_t(nTracks) * 6 * NH, 0.f);
+#pragma GCC diagnostic pop
     for (int t = 0; t < nTracks; ++t)
       for (int i = 0; i < NH; ++i) {
         for (int r = 0; r < 3; ++r)
@@ -425,8 +483,11 @@ namespace {
     printf(
         "   pt  eta  q |  z0 off [um]  z0 rows [um]  z0 +pca [um]  z0 +transport [um] | d0 +pca [um]"
         "  d0 +transport [um] | cot off [1e-4] cot on [1e-4] | pt/true off     on  on(B0) | chi2 off    on\n");
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     double_st maxZOn = 0., maxCotOn = 0., maxZOff = 0., maxCotOff = 0., maxPtOff = 0., maxPtOn = 0., maxChi2On = 0.;
     double_st maxZPca = 0., maxZFull = 0., maxD0Pca = 0., maxD0Full = 0.;
+#pragma GCC diagnostic pop
     for (int t = 0; t < nNoiseless; ++t) {
       const double_st cotTrue = sinh(kept[t].eta);
       const double_st z0Off = at(t, 0)[1] * 1e4, z0On = at(t, 1)[1] * 1e4;
@@ -522,9 +583,15 @@ namespace {
 
     // 4. pulls with hit noise and simulated multiple scattering
     printf("   pulls (%d replicas):  pt  eta |  z0 mean  z0 sigma | cot mean cot sigma\n", kRep);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     double_st oddZ = 0., oddC = 0.;
+#pragma GCC diagnostic pop
     for (std::size_t c = 0; c < pullCfg.size(); ++c) {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
       double_st sz = 0., szz = 0., sc = 0., scc = 0.;
+#pragma GCC diagnostic pop
       int nn = 0;
       for (int r = 0; r < kRep; ++r) {
         const double_st* o = at(pullIndex[c] + r, 4);

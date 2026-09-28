@@ -110,7 +110,10 @@ namespace {
   //!< the direction perpendicular to the line from the interaction region for a pointing (tilted) module.
   void frameAt(double_st x, double_st y, double_st z, bool barrel, bool tilted, double_st* ex, double_st* ey) {
     const double_st r = hypot(x, y);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     const double_st cs = (r > 0.) ? x / r : static_cast<double_st>(1.), sn = (r > 0.) ? y / r : static_cast<double_st>(0.);
+#pragma GCC diagnostic pop
     ex[0] = -sn;
     ex[1] = cs;
     ex[2] = 0.;
@@ -134,7 +137,10 @@ namespace {
   //!< Highland planar angle for a thickness x = X/X0 at momentum p (pion), the form the fit models.
   double_st theta0Of(double_st x, double_st p) {
     if (!(x > 0.))
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
       return 0.;
+#pragma GCC diagnostic pop
     constexpr double kMassPion = 0.13957;
     const double_st beta = p / sqrt(p * p + kMassPion * kMassPion);
     return 13.6e-3 / (beta * p) * sqrt(x) * (1. + 0.038 * log(x));
@@ -165,9 +171,12 @@ namespace {
     std::normal_distribution<double> gauss(0., 1.);
     for (int step = 0; step < 6000 && nHit < nWanted; ++step) {
       const auto prev = pos;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
       auto deriv = [&](const std::array<double_st, 3>& t) {
         return std::array<double_st, 3>{(q / p) * t[1] * kBField, -(q / p) * t[0] * kBField, 0.};
       };
+#pragma GCC diagnostic pop
       std::array<double_st, 3> k1p = dir, k1t = deriv(dir), p2{}, t2{}, p3{}, t3{}, p4{}, t4{};
       for (int i = 0; i < 3; ++i) {
         p2[i] = pos[i] + 0.5 * ds * k1p[i];
@@ -376,8 +385,11 @@ namespace {
     if (vals.size() < 20)
       return st;
     st.sigma = coreSigma(vals);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     st.decl = sqrt(sd / double_st(vals.size()));
     st.ratio = (st.decl > 0.) ? st.sigma / st.decl : static_cast<double_st>(0.);
+#pragma GCC diagnostic pop
     return st;
   }
 

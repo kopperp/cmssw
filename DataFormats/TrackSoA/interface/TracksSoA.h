@@ -3,7 +3,10 @@
 
 #include <alpaka/alpaka.hpp>
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #include <Eigen/Core>
+#pragma GCC diagnostic pop
 
 #include "HeterogeneousCore/AlpakaInterface/interface/OneToManyAssoc.h"
 #include "Geometry/CommonTopologies/interface/SimplePixelTopology.h"

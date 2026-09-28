@@ -6,18 +6,19 @@
 #include "DataFormats/TrackReco/interface/Track.h"
 #include "DataFormats/TrackingRecHit/interface/TrackingRecHit.h"
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
+#include "Utilities/Cadna/interface/CadnaEigenTypes.h"
 #include "RecoTracker/PixelTrackFitting/interface/PixelFitterBase.h"
 #include "RecoTracker/TkTrackingRegions/interface/TrackingRegion.h"
 
 class PixelNtupletsFitter final : public PixelFitterBase {
 public:
-  explicit PixelNtupletsFitter(float nominalB, const MagneticField* field, bool useRiemannFit);
+  explicit PixelNtupletsFitter(float_st nominalB, const MagneticField* field, bool useRiemannFit);
   ~PixelNtupletsFitter() override = default;
   std::unique_ptr<reco::Track> run(const std::vector<const TrackingRecHit*>& hits,
                                    const TrackingRegion& region) const override;
 
 private:
-  float nominalB_;
+  float_st nominalB_;
   const MagneticField* field_;
   bool useRiemannFit_;
 };
