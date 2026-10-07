@@ -48,6 +48,11 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::riemannFit {
     return a.x() * b.y() - a.y() * b.x();
   }
 
+  template <alpaka::concepts::Acc TAcc>
+  ALPAKA_FN_ACC ALPAKA_FN_INLINE float_st cross2D(const TAcc& acc, const Vector2f& a, const Vector2f& b) {
+    return a.x() * b.y() - a.y() * b.x();
+  }
+
   /*!
    *  load error in CMSSW format to our formalism
    *
@@ -141,17 +146,17 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::riemannFit {
   template <alpaka::concepts::Acc TAcc>
   ALPAKA_FN_ACC ALPAKA_FN_INLINE void par_uvrtopak(const TAcc& acc,
                                                    CircleFit& circle,
-                                                   const double_st B,
+                                                   const float_st B,
                                                    const bool error) {
-    Vector3d par_pak;
-    const double_st temp0 = circle.par.head(2).squaredNorm();
-    const double_st temp1 = alpaka::math::sqrt(acc, temp0);
+    Vector3f par_pak;
+    const float_st temp0 = circle.par.head(2).squaredNorm();
+    const float_st temp1 = alpaka::math::sqrt(acc, temp0);
     par_pak << alpaka::math::atan2(acc, circle.qCharge * circle.par(0), -circle.qCharge * circle.par(1)),
         circle.qCharge * (temp1 - circle.par(2)), circle.par(2) * B;
     if (error) {
-      const double_st temp2 = sqr(circle.par(0)) * 1. / temp0;
-      const double_st temp3 = 1. / temp1 * circle.qCharge;
-      Matrix3d j4Mat;
+      const float_st temp2 = sqr(circle.par(0)) * 1. / temp0;
+      const float_st temp3 = 1. / temp1 * circle.qCharge;
+      Matrix3f j4Mat;
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
       j4Mat << -circle.par(1) * temp2 * 1. / sqr(circle.par(0)), temp2 * 1. / circle.par(0), 0., circle.par(0) * temp3,
@@ -170,15 +175,15 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::riemannFit {
   */
   template <alpaka::concepts::Acc TAcc>
   ALPAKA_FN_ACC ALPAKA_FN_INLINE void fromCircleToPerigee(const TAcc& acc, CircleFit& circle) {
-    Vector3d par_pak;
-    const double_st temp0 = circle.par.head(2).squaredNorm();
-    const double_st temp1 = alpaka::math::sqrt(acc, temp0);
+    Vector3f par_pak;
+    const float_st temp0 = circle.par.head(2).squaredNorm();
+    const float_st temp1 = alpaka::math::sqrt(acc, temp0);
     par_pak << alpaka::math::atan2(acc, circle.qCharge * circle.par(0), -circle.qCharge * circle.par(1)),
         circle.qCharge * (temp1 - circle.par(2)), circle.qCharge / circle.par(2);
 
-    const double_st temp2 = sqr(circle.par(0)) * 1. / temp0;
-    const double_st temp3 = 1. / temp1 * circle.qCharge;
-    Matrix3d j4Mat;
+    const float_st temp2 = sqr(circle.par(0)) * 1. / temp0;
+    const float_st temp3 = 1. / temp1 * circle.qCharge;
+    Matrix3f j4Mat;
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     j4Mat << -circle.par(1) * temp2 * 1. / sqr(circle.par(0)), temp2 * 1. / circle.par(0), 0., circle.par(0) * temp3,

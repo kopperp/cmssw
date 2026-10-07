@@ -95,8 +95,8 @@ namespace {
 
   //!< One recorded crossing: the true point, the module's measurement frame and its sensor.
   struct Hit {
-    double_st p[3];
-    double_st ex[3], ey[3];  // measured and unmeasured directions, global unit vectors
+    float_st p[3];
+    float_st ex[3], ey[3];  // measured and unmeasured directions, global unit vectors
     Sensor sensor;
     bool isStub;
   };
@@ -108,11 +108,11 @@ namespace {
   //!< Measurement frame of a module at (r, z, phi): the measured direction is always the azimuthal one;
   //!< the unmeasured one is the beam direction for a flat barrel module, the radial one for a disc, and
   //!< the direction perpendicular to the line from the interaction region for a pointing (tilted) module.
-  void frameAt(double_st x, double_st y, double_st z, bool barrel, bool tilted, double_st* ex, double_st* ey) {
-    const double_st r = hypot(x, y);
+  void frameAt(float_st x, float_st y, float_st z, bool barrel, bool tilted, float_st* ex, float_st* ey) {
+    const float_st r = hypot(x, y);
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-    const double_st cs = (r > 0.) ? x / r : static_cast<double_st>(1.), sn = (r > 0.) ? y / r : static_cast<double_st>(0.);
+    const float_st cs = (r > 0.) ? x / r : static_cast<float_st>(1.), sn = (r > 0.) ? y / r : static_cast<float_st>(0.);
 #pragma GCC diagnostic pop
     ex[0] = -sn;
     ex[1] = cs;
@@ -128,21 +128,21 @@ namespace {
       ey[2] = 1.;
       return;
     }
-    const double_st n = hypot(r, z);  // pointing module: perpendicular to (r, z) in the r-z plane
+    const float_st n = hypot(r, z);  // pointing module: perpendicular to (r, z) in the r-z plane
     ey[0] = -z * cs / n;
     ey[1] = -z * sn / n;
     ey[2] = r / n;
   }
 
   //!< Highland planar angle for a thickness x = X/X0 at momentum p (pion), the form the fit models.
-  double_st theta0Of(double_st x, double_st p) {
+  float_st theta0Of(float_st x, float_st p) {
     if (!(x > 0.))
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
       return 0.;
 #pragma GCC diagnostic pop
     constexpr double kMassPion = 0.13957;
-    const double_st beta = p / sqrt(p * p + kMassPion * kMassPion);
+    const float_st beta = p / sqrt(p * p + kMassPion * kMassPion);
     return 13.6e-3 / (beta * p) * sqrt(x) * (1. + 0.038 * log(x));
   }
 
@@ -151,33 +151,33 @@ namespace {
   //!< `xLogTotal` > 0 evaluates Highland's logarithm at the whole thickness the particle crosses, as the
   //!< PDG formula prescribes, instead of at each lump separately; `xTot` returns that thickness.
   Track makeTrack(const blMaterialMap::Map* rho,
-                  double_st pT,
-                  double_st eta,
+                  float_st pT,
+                  float_st eta,
                   int q,
                   std::mt19937_64* rng,
                   int nWanted,
                   bool otOnly,
-                  double_st xLogTotal = 0.,
-                  double_st* xTot = nullptr) {
+                  float_st xLogTotal = 0.,
+                  float_st* xTot = nullptr) {
     Track tk;
-    const double_st tanl = sinh(eta);
-    const double_st p = pT * cosh(eta);
-    const double_st invn = 1. / sqrt(1. + tanl * tanl);
-    std::array<double_st, 3> pos = {0., 0., 0.};
-    std::array<double_st, 3> dir = {invn, 0., tanl * invn};  // phi0 = 0
-    const double_st ds = 0.2;
+    const float_st tanl = sinh(eta);
+    const float_st p = pT * cosh(eta);
+    const float_st invn = 1. / sqrt(1. + tanl * tanl);
+    std::array<float_st, 3> pos = {0., 0., 0.};
+    std::array<float_st, 3> dir = {invn, 0., tanl * invn};  // phi0 = 0
+    const float_st ds = 0.2;
     int nHit = 0;
-    double_st xCluster = 0., xSum = 0.;
+    float_st xCluster = 0., xSum = 0.;
     std::normal_distribution<double> gauss(0., 1.);
     for (int step = 0; step < 6000 && nHit < nWanted; ++step) {
       const auto prev = pos;
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-      auto deriv = [&](const std::array<double_st, 3>& t) {
-        return std::array<double_st, 3>{(q / p) * t[1] * kBField, -(q / p) * t[0] * kBField, 0.};
+      auto deriv = [&](const std::array<float_st, 3>& t) {
+        return std::array<float_st, 3>{(q / p) * t[1] * kBField, -(q / p) * t[0] * kBField, 0.};
       };
 #pragma GCC diagnostic pop
-      std::array<double_st, 3> k1p = dir, k1t = deriv(dir), p2{}, t2{}, p3{}, t3{}, p4{}, t4{};
+      std::array<float_st, 3> k1p = dir, k1t = deriv(dir), p2{}, t2{}, p3{}, t3{}, p4{}, t4{};
       for (int i = 0; i < 3; ++i) {
         p2[i] = pos[i] + 0.5 * ds * k1p[i];
         t2[i] = dir[i] + 0.5 * ds * k1t[i];
@@ -197,7 +197,7 @@ namespace {
         pos[i] += ds / 6. * (k1p[i] + 2. * k2p[i] + 2. * k3p[i] + k4p[i]);
         dir[i] += ds / 6. * (k1t[i] + 2. * k2t[i] + 2. * k3t[i] + k4t[i]);
       }
-      double_st dn = 0.;
+      float_st dn = 0.;
       for (int i = 0; i < 3; ++i)
         dn += dir[i] * dir[i];
       dn = sqrt(dn);
@@ -207,23 +207,23 @@ namespace {
       // one Highland kink per crossed material lump of the map (its air is charged in lumps of the same
       // size, so that none of its total is lost)
       {
-        const double_st rr = hypot(pos[0], pos[1]);
-        const double_st dens = blMaterialMap::rhoAt(*rho, float(rr), float(pos[2]));
+        const float_st rr = hypot(pos[0], pos[1]);
+        const float_st dens = blMaterialMap::rhoAt(*rho, float(rr), float(pos[2]));
         xCluster += dens * ds;
         xSum += dens * ds;
         constexpr double kDense = 1.e-3, kLump = 2.e-3;
         if (rng != nullptr && xCluster > 0. && (dens < kDense || xCluster > kLump)) {
-          const double_st th0 = (xLogTotal > 0.) ? theta0Of(xCluster, p) * (1. + 0.038 * log(xLogTotal)) /
+          const float_st th0 = (xLogTotal > 0.) ? theta0Of(xCluster, p) * (1. + 0.038 * log(xLogTotal)) /
                                                     (1. + 0.038 * log(xCluster))
                                               : theta0Of(xCluster, p);
           xCluster = 0.;
-          std::array<double_st, 3> u = {-dir[1], dir[0], 0.};
-          const double_st un = hypot(u[0], u[1]);
+          std::array<float_st, 3> u = {-dir[1], dir[0], 0.};
+          const float_st un = hypot(u[0], u[1]);
           for (int i = 0; i < 3; ++i)
             u[i] /= un;
-          const std::array<double_st, 3> v = {-dir[2] * u[1], dir[2] * u[0], dir[0] * u[1] - dir[1] * u[0]};
-          const double_st a = th0 * gauss(*rng), b = th0 * gauss(*rng);
-          double_st nn = 0.;
+          const std::array<float_st, 3> v = {-dir[2] * u[1], dir[2] * u[0], dir[0] * u[1] - dir[1] * u[0]};
+          const float_st a = th0 * gauss(*rng), b = th0 * gauss(*rng);
+          float_st nn = 0.;
           for (int i = 0; i < 3; ++i) {
             dir[i] += a * u[i] + b * v[i];
             nn += dir[i] * dir[i];
@@ -234,7 +234,7 @@ namespace {
         }
       }
 
-      auto record = [&](double_st x, double_st y, double_st z, bool barrel, bool tilted, Sensor s) {
+      auto record = [&](float_st x, float_st y, float_st z, bool barrel, bool tilted, Sensor s) {
         Hit& h = tk.hit[nHit];
         h.p[0] = x;
         h.p[1] = y;
@@ -244,15 +244,15 @@ namespace {
         frameAt(x, y, z, barrel, tilted, h.ex, h.ey);
         ++nHit;
       };
-      const double_st r0 = hypot(prev[0], prev[1]), r1 = hypot(pos[0], pos[1]);
+      const float_st r0 = hypot(prev[0], prev[1]), r1 = hypot(pos[0], pos[1]);
       for (auto const& bl : kBarrels) {
         if (nHit >= nWanted)
           break;
         if (otOnly && bl.sensor == kPixel)
           continue;
         if ((r0 - bl.r) * (r1 - bl.r) < 0.) {
-          const double_st f = (bl.r - r0) / (r1 - r0);
-          const double_st z = prev[2] + f * (pos[2] - prev[2]);
+          const float_st f = (bl.r - r0) / (r1 - r0);
+          const float_st z = prev[2] + f * (pos[2] - prev[2]);
           if (abs(z) < bl.halfZ)
             record(prev[0] + f * (pos[0] - prev[0]), prev[1] + f * (pos[1] - prev[1]), z, true, bl.tilted, bl.sensor);
         }
@@ -263,11 +263,11 @@ namespace {
         if (otOnly && dc.sensor == kPixel)
           continue;
         for (int sgn = -1; sgn <= 1; sgn += 2) {
-          const double_st zt = sgn * dc.z;
+          const float_st zt = sgn * dc.z;
           if ((prev[2] - zt) * (pos[2] - zt) < 0.) {
-            const double_st f = (zt - prev[2]) / (pos[2] - prev[2]);
-            const double_st x = prev[0] + f * (pos[0] - prev[0]), y = prev[1] + f * (pos[1] - prev[1]);
-            const double_st r = hypot(x, y);
+            const float_st f = (zt - prev[2]) / (pos[2] - prev[2]);
+            const float_st x = prev[0] + f * (pos[0] - prev[0]), y = prev[1] + f * (pos[1] - prev[1]);
+            const float_st r = hypot(x, y);
             if (r > dc.rMin && r < dc.rMax)
               record(x, y, zt, false, false, (r > dc.rSwitch) ? kSS : kPS);
           }
@@ -286,15 +286,15 @@ namespace {
   template <int NH>
   struct FitKernel {
     ALPAKA_FN_ACC void operator()(Acc1D const& acc,
-                                  double_st const* hitsIn,
+                                  float_st const* hitsIn,
                                   float_st const* geIn,
                                   const blMaterialMap::Map* rho,
                                   int nTracks,
-                                  double_st* scratch,
-                                  double_st* out) const {
+                                  float_st* scratch,
+                                  float_st* out) const {
       for (auto j : cms::alpakatools::uniform_elements(acc, nTracks * kNVar)) {
         const int t = int(j) / kNVar, v = int(j) % kNVar;
-        Eigen::Matrix<double_st, 3, NH> hits;
+        Eigen::Matrix<float_st, 3, NH> hits;
         Eigen::Matrix<float_st, 6, NH> hits_ge;
         for (int c = 0; c < NH; ++c) {
           for (int r = 0; r < 3; ++r)
@@ -304,9 +304,9 @@ namespace {
           for (int r = 0; r < 6; ++r)
             hits_ge(r, c) = g[r];
         }
-        Eigen::Vector<double_st, 4> ff;
+        Eigen::Vector<float_st, 4> ff;
         bld::fastFit(acc, hits, ff);
-        double_st* mine = scratch + std::size_t(j) * std::size_t(bld::kLegacyFitScratchDoubles<NH>);
+        float_st* mine = scratch + std::size_t(j) * std::size_t(bld::kLegacyFitScratchDoubles<NH>);
         bld::PreparedBrokenLineDataMap<NH, 1> data(mine);
         bld::LegacyFitWorkspaceMap<NH, 1> fitWs(mine + bld::kPreparedDataDoubles<NH>);
         bld::karimaki_circle_fit circle;
@@ -318,7 +318,7 @@ namespace {
         bld::lineFit(acc, hits_ge, ff, kBField, data, line, fitWs, /*fitCorrections=*/true);
         bld::circleFit(
             acc, hits, hits_ge, ff, kBField, data, circle, fitWs, /*fitCorrections=*/true, /*elossGaps=*/true);
-        double_st* o = out + std::size_t(j) * kOut;
+        float_st* o = out + std::size_t(j) * kOut;
         o[0] = circle.par(1);                                    // d0
         o[1] = line.par(1);                                      // z0
         o[2] = circle.par(0);                                    // phi
@@ -334,30 +334,30 @@ namespace {
   };
 
   struct Config {
-    double_st pT, eta;
+    float_st pT, eta;
   };
 
   //!< spread of a fitted parameter over the replicas, divided by the error the fit declares for it
   struct Stat {
-    double_st mean = 0., sigma = 0., decl = 0., ratio = 0.;
+    float_st mean = 0., sigma = 0., decl = 0., ratio = 0.;
   };
   //!< Core width, the estimator the in-situ gate uses: the +-2 sigma truncated r.m.s., iterated and
   //!< rescaled by the truncation factor of a Gaussian (E[x^2 | |x| < 2 sigma] = 0.77374 sigma^2).
-  double_st coreSigma(const std::vector<double_st>& v) {
+  float_st coreSigma(const std::vector<float_st>& v) {
     if (v.size() < 20)
       return 0.;
-    double_st mu = 0.;
-    for (double_st x : v)
+    float_st mu = 0.;
+    for (float_st x : v)
       mu += x;
-    mu /= double_st(v.size());
-    double_st sg = 0.;
-    for (double_st x : v)
+    mu /= float_st(v.size());
+    float_st sg = 0.;
+    for (float_st x : v)
       sg += (x - mu) * (x - mu);
-    sg = sqrt(sg / double_st(v.size()));
+    sg = sqrt(sg / float_st(v.size()));
     for (int it = 0; it < 6 && sg > 0.; ++it) {
-      double_st s = 0., ss = 0.;
+      float_st s = 0., ss = 0.;
       int n = 0;
-      for (double_st x : v)
+      for (float_st x : v)
         if (abs(x - mu) < 2. * sg) {
           s += x;
           ss += x * x;
@@ -371,11 +371,11 @@ namespace {
     return sg;
   }
 
-  Stat spreadOverDeclared(const double_st* out, const std::vector<int>& idx, int v, int par, int varCol) {
-    std::vector<double_st> vals;
-    double_st sd = 0.;
+  Stat spreadOverDeclared(const float_st* out, const std::vector<int>& idx, int v, int par, int varCol) {
+    std::vector<float_st> vals;
+    float_st sd = 0.;
     for (int t : idx) {
-      const double_st* o = out + (std::size_t(t) * kNVar + v) * kOut;
+      const float_st* o = out + (std::size_t(t) * kNVar + v) * kOut;
       if (!(o[varCol] > 0.))
         continue;
       vals.push_back(o[par]);
@@ -387,8 +387,8 @@ namespace {
     st.sigma = coreSigma(vals);
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-    st.decl = sqrt(sd / double_st(vals.size()));
-    st.ratio = (st.decl > 0.) ? st.sigma / st.decl : static_cast<double_st>(0.);
+    st.decl = sqrt(sd / float_st(vals.size()));
+    st.ratio = (st.decl > 0.) ? st.sigma / st.decl : static_cast<float_st>(0.);
 #pragma GCC diagnostic pop
     return st;
   }
@@ -402,12 +402,12 @@ namespace {
                  bool gaussianReadout,
                  int fineY,  // 1 = the unmeasured coordinate of the disc hits is read out finely
                  const char* label,
-                 double_st& worstMeasHonest,
-                 double_st& worstMeasProd,
-                 double_st& worstFullHonest) {
+                 float_st& worstMeasHonest,
+                 float_st& worstMeasProd,
+                 float_st& worstFullHonest) {
     std::vector<Config> cfgs;
-    for (double_st pT : {1., 3., 10.})
-      for (double_st aeta : {0.3, 0.8, 1.2, 1.7, 2.2})
+    for (float_st pT : {1., 3., 10.})
+      for (float_st aeta : {0.3, 0.8, 1.2, 1.7, 2.2})
         cfgs.push_back({pT, aeta});
 
     std::mt19937_64 rng(20260913);
@@ -415,7 +415,7 @@ namespace {
     std::uniform_real_distribution<double> flat(-0.5, 0.5);
 
     std::vector<Track> tracks;
-    std::vector<double_st> xTotOf(cfgs.size(), 0.);
+    std::vector<float_st> xTotOf(cfgs.size(), 0.);
     std::vector<std::array<std::vector<int>, 2>> index(cfgs.size());  // [cfg][scatter on/off] -> replicas
     for (std::size_t c = 0; c < cfgs.size(); ++c) {
       makeTrack(rho, cfgs[c].pT, cfgs[c].eta, +1, nullptr, NH, otOnly, 0., &xTotOf[c]);
@@ -438,7 +438,7 @@ namespace {
     // readout: a uniform position over the measured pitch and over the unmeasured cell length; the error
     // block the fit is handed is that cell's variance, with the production scale factors on the measured
     // coordinate of a stub in copy 0 and without them in copy 1
-    std::vector<double_st> hitsHost(std::size_t(nTracks) * 3 * NH);
+    std::vector<float_st> hitsHost(std::size_t(nTracks) * 3 * NH);
     std::vector<float_st> geHost(std::size_t(nTracks) * 2 * 6 * NH, 0.f);
     for (int t = 0; t < nTracks; ++t) {
       for (int i = 0; i < NH; ++i) {
@@ -446,21 +446,21 @@ namespace {
         SensorGeom g = kGeom[h.sensor];
         if (fineY == 1 && h.isStub && abs(h.ey[2]) < 0.5)  // the disc rings, whose strips run radially
           g.lenY = g.pitchX;
-        const double_st dx = gaussianReadout ? g.pitchX / std::sqrt(12.) * gauss(rng) : g.pitchX * flat(rng);
-        const double_st dy = gaussianReadout ? g.lenY / std::sqrt(12.) * gauss(rng) : g.lenY * flat(rng);
+        const float_st dx = gaussianReadout ? g.pitchX / std::sqrt(12.) * gauss(rng) : g.pitchX * flat(rng);
+        const float_st dy = gaussianReadout ? g.lenY / std::sqrt(12.) * gauss(rng) : g.lenY * flat(rng);
         for (int r = 0; r < 3; ++r)
           hitsHost[std::size_t(t) * 3 * NH + 3 * i + r] = h.p[r] + dx * h.ex[r] + dy * h.ey[r];
-        const double_st varX = g.pitchX * g.pitchX / 12., varY = g.lenY * g.lenY / 12.;
+        const float_st varX = g.pitchX * g.pitchX / 12., varY = g.lenY * g.lenY / 12.;
         // BrokenLineFitKernels: 2S 0.4624 (barrel) / 0.8464 (endcap), PS 0.64 / 0.9025, by |z| < 118 cm
-        double_st f = 1.;
+        float_st f = 1.;
         if (h.isStub) {
           const bool barrelHit = abs(h.p[2]) < 118.;
           f = (h.sensor == kSS) ? (barrelHit ? 0.4624 : 0.8464) : (barrelHit ? 0.64 : 0.9025);
         }
         for (int copy = 0; copy < 2; ++copy) {
-          const double_st vx = (copy == 0) ? varX * f : varX;
+          const float_st vx = (copy == 0) ? varX * f : varX;
           float_st* ge = geHost.data() + std::size_t(2 * t + copy) * 6 * NH + 6 * i;
-          const double_st c3[3][3] = {{h.ex[0], h.ex[1], h.ex[2]}, {h.ey[0], h.ey[1], h.ey[2]}, {0., 0., 0.}};
+          const float_st c3[3][3] = {{h.ex[0], h.ex[1], h.ex[2]}, {h.ey[0], h.ey[1], h.ey[2]}, {0., 0., 0.}};
           auto comp = [&](int a, int b) { return vx * c3[0][a] * c3[0][b] + varY * c3[1][a] * c3[1][b]; };
           ge[0] = float(comp(0, 0));
           ge[1] = float(comp(0, 1));
@@ -472,18 +472,18 @@ namespace {
       }
     }
 
-    auto hits_h = cms::alpakatools::make_host_buffer<double_st[], Platform>(hitsHost.size());
+    auto hits_h = cms::alpakatools::make_host_buffer<float_st[], Platform>(hitsHost.size());
     std::copy(hitsHost.begin(), hitsHost.end(), hits_h.data());
     auto ge_h = cms::alpakatools::make_host_buffer<float_st[], Platform>(geHost.size());
     std::copy(geHost.begin(), geHost.end(), ge_h.data());
     auto rho_h = cms::alpakatools::make_host_buffer<blMaterialMap::Map, Platform>();
     *rho_h.data() = *rho;
-    auto out_h = cms::alpakatools::make_host_buffer<double_st[], Platform>(std::size_t(nTracks) * kNVar * kOut);
-    auto hits_d = cms::alpakatools::make_device_buffer<double_st[]>(queue, hitsHost.size());
+    auto out_h = cms::alpakatools::make_host_buffer<float_st[], Platform>(std::size_t(nTracks) * kNVar * kOut);
+    auto hits_d = cms::alpakatools::make_device_buffer<float_st[]>(queue, hitsHost.size());
     auto ge_d = cms::alpakatools::make_device_buffer<float_st[]>(queue, geHost.size());
     auto rho_d = cms::alpakatools::make_device_buffer<blMaterialMap::Map>(queue);
-    auto out_d = cms::alpakatools::make_device_buffer<double_st[]>(queue, std::size_t(nTracks) * kNVar * kOut);
-    auto scr_d = cms::alpakatools::make_device_buffer<double_st[]>(
+    auto out_d = cms::alpakatools::make_device_buffer<float_st[]>(queue, std::size_t(nTracks) * kNVar * kOut);
+    auto scr_d = cms::alpakatools::make_device_buffer<float_st[]>(
         queue, std::size_t(nTracks) * kNVar * std::size_t(bld::kLegacyFitScratchDoubles<NH>));
     alpaka::memcpy(queue, hits_d, hits_h);
     alpaka::memcpy(queue, ge_d, ge_h);
@@ -499,7 +499,7 @@ namespace {
                         out_d.data());
     alpaka::memcpy(queue, out_h, out_d);
     alpaka::wait(queue);
-    const double_st* out = out_h.data();
+    const float_st* out = out_h.data();
 
     printf("\n== fast-BL declared covariance, %s, %d hits ==\n", label, NH);
     printf(
@@ -550,7 +550,7 @@ TEST_CASE("fast BrokenLine stub covariance on the " EDM_STRINGIZE(ALPAKA_ACCELER
   for (auto const& device : devices) {
     auto queue = Queue(device);
     printf("\n%s\n", alpaka::getName(device).c_str());
-    double_st mh = 0., mp = 0., fh = 0., dummy = 0.;
+    float_st mh = 0., mp = 0., fh = 0., dummy = 0.;
     runLayout<kNOt>(queue,
                     rho,
                     /*otOnly=*/true,
@@ -560,7 +560,7 @@ TEST_CASE("fast BrokenLine stub covariance on the " EDM_STRINGIZE(ALPAKA_ACCELER
                     mh,
                     mp,
                     fh);
-    double_st gh = 0., gp = 0., gf = 0.;
+    float_st gh = 0., gp = 0., gf = 0.;
     runLayout<kNOt>(queue,
                     rho,
                     /*otOnly=*/true,
@@ -570,7 +570,7 @@ TEST_CASE("fast BrokenLine stub covariance on the " EDM_STRINGIZE(ALPAKA_ACCELER
                     gh,
                     gp,
                     gf);
-    double_st fd = 0., fp = 0., ff2 = 0.;
+    float_st fd = 0., fp = 0., ff2 = 0.;
     runLayout<kNOt>(queue,
                     rho,
                     /*otOnly=*/true,

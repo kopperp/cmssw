@@ -41,9 +41,9 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                   uint32_t nHits,
                                   HitsMultiView hh,
                                   ::reco::CAModulesConstView cm,
-                                  double_st* __restrict__ phits,
+                                  float_st* __restrict__ phits,
                                   float_st* __restrict__ phits_ge,
-                                  double_st* __restrict__ pfast_fit,
+                                  float_st* __restrict__ pfast_fit,
                                   uint32_t offset) const {
       constexpr uint32_t hitsInFit = N;
 
@@ -73,8 +73,8 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
 
         ALPAKA_ASSERT_ACC(foundNtuplets->size(tkid) == nHits);
 
-        riemannFit::Map3xNd<N> hits(phits + local_idx);
-        riemannFit::Map4d fast_fit(pfast_fit + local_idx);
+        riemannFit::Map3xNf<N> hits(phits + local_idx);
+        riemannFit::Map4f fast_fit(pfast_fit + local_idx);
         riemannFit::Map6xNf<N> hits_ge(phits_ge + local_idx);
 
         // Prepare data structure
@@ -110,10 +110,10 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
     ALPAKA_FN_ACC void operator()(Acc1D const &acc,
                                   TupleMultiplicity const *__restrict__ tupleMultiplicity,
                                   uint32_t nHits,
-                                  double bField,
-                                  double_st* __restrict__ phits,
+                                  float bField,
+                                  float_st* __restrict__ phits,
                                   float_st* __restrict__ phits_ge,
-                                  double_st* __restrict__ pfast_fit_input,
+                                  float_st* __restrict__ pfast_fit_input,
                                   riemannFit::CircleFit *circle_fit,
                                   uint32_t offset) const {
       ALPAKA_ASSERT_ACC(circle_fit);
@@ -128,13 +128,13 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
         if (tuple_idx >= tupleMultiplicity->size(nHits))
           break;
 
-        riemannFit::Map3xNd<N> hits(phits + local_idx);
-        riemannFit::Map4d fast_fit(pfast_fit_input + local_idx);
+        riemannFit::Map3xNf<N> hits(phits + local_idx);
+        riemannFit::Map4f fast_fit(pfast_fit_input + local_idx);
         riemannFit::Map6xNf<N> hits_ge(phits_ge + local_idx);
 
-        riemannFit::VectorNd<N> rad = (hits.block(0, 0, 2, N).colwise().norm());
+        riemannFit::VectorNf<N> rad = (hits.block(0, 0, 2, N).colwise().norm());
 
-        riemannFit::Matrix2Nd<N> hits_cov = riemannFit::Matrix2Nd<N>::Zero();
+        riemannFit::Matrix2Nf<N> hits_cov = riemannFit::Matrix2Nf<N>::Zero();
         riemannFit::loadCovariance2D(acc, hits_ge, hits_cov);
 
         circle_fit[local_idx] =
@@ -157,9 +157,9 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
                                   uint32_t nHits,
                                   double bField,
                                   OutputSoAView results_view,
-                                  double_st* __restrict__ phits,
+                                  float_st* __restrict__ phits,
                                   float_st* __restrict__ phits_ge,
-                                  double_st* __restrict__ pfast_fit_input,
+                                  float_st* __restrict__ pfast_fit_input,
                                   riemannFit::CircleFit *__restrict__ circle_fit,
                                   uint32_t offset) const {
       ALPAKA_ASSERT_ACC(circle_fit);
@@ -177,8 +177,8 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
         // get it for the ntuple container (one to one to helix)
         int32_t tkid = *(tupleMultiplicity->begin(nHits) + tuple_idx);
 
-        riemannFit::Map3xNd<N> hits(phits + local_idx);
-        riemannFit::Map4d fast_fit(pfast_fit_input + local_idx);
+        riemannFit::Map3xNf<N> hits(phits + local_idx);
+        riemannFit::Map4f fast_fit(pfast_fit_input + local_idx);
         riemannFit::Map6xNf<N> hits_ge(phits_ge + local_idx);
 
         auto const &line_fit = riemannFit::lineFit(acc, hits, hits_ge, circle_fit[local_idx], fast_fit, bField, true);
@@ -251,12 +251,12 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE {
     static_assert(maxN == 6,
                   "the explicit 3/4/5-hit ladder below leaves bins 6..maxN-1 unfitted for a cap != 6: "
                   "generalize the ladder before changing maxHitsOnTrackForRiemannFit");
-    auto hitsDevice = cms::alpakatools::make_device_buffer<double_st[]>(
-        queue, maxNumberOfConcurrentFits_ * sizeof(riemannFit::Matrix3xNd<maxN>) / sizeof(double_st));
+    auto hitsDevice = cms::alpakatools::make_device_buffer<float_st[]>(
+        queue, maxNumberOfConcurrentFits_ * sizeof(riemannFit::Matrix3xNf<maxN>) / sizeof(float_st));
     auto hits_geDevice = cms::alpakatools::make_device_buffer<float_st[]>(
         queue, maxNumberOfConcurrentFits_ * sizeof(riemannFit::Matrix6xNf<maxN>) / sizeof(float_st));
-    auto fast_fit_resultsDevice = cms::alpakatools::make_device_buffer<double_st[]>(
-        queue, maxNumberOfConcurrentFits_ * sizeof(riemannFit::Vector4d) / sizeof(double_st));
+    auto fast_fit_resultsDevice = cms::alpakatools::make_device_buffer<float_st[]>(
+        queue, maxNumberOfConcurrentFits_ * sizeof(riemannFit::Vector4f) / sizeof(float_st));
     auto circle_fit_resultsDevice_holder =
         cms::alpakatools::make_device_buffer<char[]>(queue, maxNumberOfConcurrentFits_ * sizeof(riemannFit::CircleFit));
     riemannFit::CircleFit *circle_fit_resultsDevice_ =

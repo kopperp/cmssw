@@ -51,13 +51,13 @@ namespace {
   // ---------------------------------------------------------------- the field and the material, on the host
   //!< B in GeV/cm at a point, from the lattice: solenoid symmetry, B = (Br*rhat, Bz). With
   //!< tanLambda*cosAlpha = 0 the bending value bBendAndBrAt returns is Bz itself.
-  std::array<double_st, 3> bFieldAt(const float* map, const std::array<double_st, 3>& p) {
-    const double_st r = hypot(p[0], p[1]);
-    double brNorm = 0.;
+  std::array<float_st, 3> bFieldAt(const float* map, const std::array<float_st, 3>& p) {
+    const float_st r = hypot(p[0], p[1]);
+    float brNorm = 0.;
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-    const double_st bz = blBFieldMap::bBendAndBrAt(map, r, p[2], 0., brNorm) * kBzOrigin;
-    const double_st br = brNorm * kBzOrigin;
+    const float_st bz = blBFieldMap::bBendAndBrAt(map, r, p[2], 0., brNorm) * kBzOrigin;
+    const float_st br = brNorm * kBzOrigin;
 #pragma GCC diagnostic pop
     if (r > 0.)
       return {br * p[0] / r, br * p[1] / r, bz};
@@ -103,19 +103,19 @@ namespace {
 
   //!< one generated track: the hits it leaves on the surfaces above, in path order.
   struct Track {
-    double_st hits[3][kN];
+    float_st hits[3][kN];
     bool ok = false;
   };
 
   //!< Highland planar angle for a thickness x = X/X0 at momentum p (pion), as the fit models it.
-  double_st theta0Of(double_st x, double_st p) {
+  float_st theta0Of(float_st x, float_st p) {
     if (!(x > 0.))
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
       return 0.;
 #pragma GCC diagnostic pop
     constexpr double kMassPion = 0.13957;
-    const double_st beta = p / sqrt(p * p + kMassPion * kMassPion);
+    const float_st beta = p / sqrt(p * p + kMassPion * kMassPion);
     return 13.6e-3 / (beta * p) * sqrt(x) * (1. + 0.038 * log(x));
   }
 
@@ -123,37 +123,37 @@ namespace {
   //!< crossings of the surfaces above until kN of them are collected.
   Track makeTrack(const float* map,
                   const blMaterialMap::Map* rho,
-                  double_st pT,
-                  double_st eta,
+                  float_st pT,
+                  float_st eta,
                   int q,
                   std::mt19937_64* rng,
                   int nWanted,
                   bool otOnly) {
     Track tk;
-    const double_st tanl = sinh(eta);
-    const double_st p = pT * cosh(eta);
-    const double_st invn = 1. / sqrt(1. + tanl * tanl);
+    const float_st tanl = sinh(eta);
+    const float_st p = pT * cosh(eta);
+    const float_st invn = 1. / sqrt(1. + tanl * tanl);
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-    std::array<double_st, 3> pos = {0., 0., 0.};
-    std::array<double_st, 3> dir = {invn, 0., tanl * invn};  // phi0 = 0
-    const double_st ds = 0.2;
+    std::array<float_st, 3> pos = {0., 0., 0.};
+    std::array<float_st, 3> dir = {invn, 0., tanl * invn};  // phi0 = 0
+    const float_st ds = 0.2;
 #pragma GCC diagnostic pop
     int nHit = 0;
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-    double_st xCluster = 0.;  // running X/X0 of the material cluster being crossed
+    float_st xCluster = 0.;  // running X/X0 of the material cluster being crossed
 #pragma GCC diagnostic pop
     std::normal_distribution<double> gauss(0., 1.);
     for (int step = 0; step < 4000 && nHit < nWanted; ++step) {
       const auto prev = pos;
-      auto deriv = [&](const std::array<double_st, 3>& x, const std::array<double_st, 3>& t) {
+      auto deriv = [&](const std::array<float_st, 3>& x, const std::array<float_st, 3>& t) {
         const auto b = bFieldAt(map, x);
-        return std::array<double_st, 3>{(q / p) * (t[1] * b[2] - t[2] * b[1]),
+        return std::array<float_st, 3>{(q / p) * (t[1] * b[2] - t[2] * b[1]),
                                      (q / p) * (t[2] * b[0] - t[0] * b[2]),
                                      (q / p) * (t[0] * b[1] - t[1] * b[0])};
       };
-      std::array<double_st, 3> k1p = dir, k1t = deriv(pos, dir), p2{}, t2{}, p3{}, t3{}, p4{}, t4{};
+      std::array<float_st, 3> k1p = dir, k1t = deriv(pos, dir), p2{}, t2{}, p3{}, t3{}, p4{}, t4{};
       for (int i = 0; i < 3; ++i) {
         p2[i] = pos[i] + 0.5 * ds * k1p[i];
         t2[i] = dir[i] + 0.5 * ds * k1t[i];
@@ -173,16 +173,16 @@ namespace {
         pos[i] += ds / 6. * (k1p[i] + 2. * k2p[i] + 2. * k3p[i] + k4p[i]);
         dir[i] += ds / 6. * (k1t[i] + 2. * k2t[i] + 2. * k3t[i] + k4t[i]);
       }
-      const double_st dn = sqrt(dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2]);
+      const float_st dn = sqrt(dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2]);
       for (int i = 0; i < 3; ++i)
         dir[i] /= dn;
 
       // multiple scattering: one kink per contiguous material cluster, Highland at the cluster's thickness
       if (rng != nullptr) {
-        const double_st rr = hypot(pos[0], pos[1]);
+        const float_st rr = hypot(pos[0], pos[1]);
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-        const double_st density = blMaterialMap::rhoAt(*rho, float(rr), float(pos[2]));
+        const float_st density = blMaterialMap::rhoAt(*rho, float(rr), float(pos[2]));
 #pragma GCC diagnostic pop
         xCluster += density * ds;
         // one Highland kink per crossed layer (the map's air, 3.3e-5 per cm, is charged in lumps of the
@@ -190,24 +190,24 @@ namespace {
         // material ends or the lump is big enough.
         constexpr double kDense = 1.e-3, kLump = 2.e-3;
         if (xCluster > 0. && (density < kDense || xCluster > kLump)) {
-          const double_st th0 = theta0Of(xCluster, p);
+          const float_st th0 = theta0Of(xCluster, p);
           xCluster = 0.;
           // two independent planar kinks in the plane transverse to the direction
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-          std::array<double_st, 3> u = {-dir[1], dir[0], 0.};
+          std::array<float_st, 3> u = {-dir[1], dir[0], 0.};
 #pragma GCC diagnostic pop
-          const double_st un = hypot(u[0], u[1]);
+          const float_st un = hypot(u[0], u[1]);
           for (int i = 0; i < 3; ++i)
             u[i] /= un;
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-          const std::array<double_st, 3> v = {-dir[2] * u[1], dir[2] * u[0], dir[0] * u[1] - dir[1] * u[0]};
+          const std::array<float_st, 3> v = {-dir[2] * u[1], dir[2] * u[0], dir[0] * u[1] - dir[1] * u[0]};
 #pragma GCC diagnostic pop
-          const double_st a = th0 * gauss(*rng), b = th0 * gauss(*rng);
+          const float_st a = th0 * gauss(*rng), b = th0 * gauss(*rng);
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-          double_st nn = 0.;
+          float_st nn = 0.;
 #pragma GCC diagnostic pop
           for (int i = 0; i < 3; ++i) {
             dir[i] += a * u[i] + b * v[i];
@@ -220,15 +220,15 @@ namespace {
       }
 
       // surface crossings of this step (linear interpolation inside the step)
-      const double_st r0 = hypot(prev[0], prev[1]), r1 = hypot(pos[0], pos[1]);
+      const float_st r0 = hypot(prev[0], prev[1]), r1 = hypot(pos[0], pos[1]);
       for (auto const& bl : kBarrels) {
         if (nHit >= nWanted)
           break;
         if (otOnly && bl.r < 20.)
           continue;
         if ((r0 - bl.r) * (r1 - bl.r) < 0.) {
-          const double_st f = (bl.r - r0) / (r1 - r0);
-          const double_st z = prev[2] + f * (pos[2] - prev[2]);
+          const float_st f = (bl.r - r0) / (r1 - r0);
+          const float_st z = prev[2] + f * (pos[2] - prev[2]);
           if (abs(z) < bl.halfZ) {
             tk.hits[0][nHit] = prev[0] + f * (pos[0] - prev[0]);
             tk.hits[1][nHit] = prev[1] + f * (pos[1] - prev[1]);
@@ -245,12 +245,12 @@ namespace {
         for (int sgn = -1; sgn <= 1; sgn += 2) {
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-          const double_st zt = sgn * dc.z;
+          const float_st zt = sgn * dc.z;
 #pragma GCC diagnostic pop
           if ((prev[2] - zt) * (pos[2] - zt) < 0.) {
-            const double_st f = (zt - prev[2]) / (pos[2] - prev[2]);
-            const double_st x = prev[0] + f * (pos[0] - prev[0]), y = prev[1] + f * (pos[1] - prev[1]);
-            const double_st r = hypot(x, y);
+            const float_st f = (zt - prev[2]) / (pos[2] - prev[2]);
+            const float_st x = prev[0] + f * (pos[0] - prev[0]), y = prev[1] + f * (pos[1] - prev[1]);
+            const float_st r = hypot(x, y);
             if (r > dc.rMin && r < dc.rMax) {
               tk.hits[0][nHit] = x;
               tk.hits[1][nHit] = y;
@@ -271,44 +271,44 @@ namespace {
   //!< per-track effective bending field, the same hit average blEffectiveBField (BrokenLineFitKernels.h)
   //!< forms for the production fit.
   template <int NH>
-  ALPAKA_FN_ACC ALPAKA_FN_INLINE double_st effectiveBField(Acc1D const& acc,
-                                                        Eigen::Matrix<double_st, 3, NH> const& hits,
-                                                        Eigen::Vector<double_st, 4> const& ff,
-                                                        double_st b,
+  ALPAKA_FN_ACC ALPAKA_FN_INLINE float_st effectiveBField(Acc1D const& acc,
+                                                        Eigen::Matrix<float_st, 3, NH> const& hits,
+                                                        Eigen::Vector<float_st, 4> const& ff,
+                                                        float_st b,
                                                         const float* map) {
-    const double_st absR = alpaka::math::abs(acc, ff(2));
+    const float_st absR = alpaka::math::abs(acc, ff(2));
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-    double_st sum = 0.;
+    float_st sum = 0.;
 #pragma GCC diagnostic pop
     for (int i = 0; i < NH; ++i) {
-      const double_st r = alpaka::math::sqrt(acc, hits(0, i) * hits(0, i) + hits(1, i) * hits(1, i));
-      const double_st den = ff(3) * absR * r;
+      const float_st r = alpaka::math::sqrt(acc, hits(0, i) * hits(0, i) + hits(1, i) * hits(1, i));
+      const float_st den = ff(3) * absR * r;
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-      const double_st tlca = (den != 0.) ? -(ff(0) * hits(1, i) - ff(1) * hits(0, i)) / den : double_st(0.);
+      const float_st tlca = (den != 0.) ? -(ff(0) * hits(1, i) - ff(1) * hits(0, i)) / den : float_st(0.);
 #pragma GCC diagnostic pop
       sum += blBFieldMap::bBendAt(map, r, hits(2, i), tlca);
     }
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-    return b * sum / double_st(NH);
+    return b * sum / float_st(NH);
 #pragma GCC diagnostic pop
   }
 
   template <int NH>
   struct FitKernel {
     ALPAKA_FN_ACC void operator()(Acc1D const& acc,
-                                  double_st const* hitsIn,
+                                  float_st const* hitsIn,
                                   float_st const* geIn,
                                   const blMaterialMap::Map* rho,
                                   const float* map,
                                   int nTracks,
-                                  double_st* scratch,
-                                  double_st* out) const {
+                                  float_st* scratch,
+                                  float_st* out) const {
       for (auto j : cms::alpakatools::uniform_elements(acc, nTracks * kNVar)) {
         const int t = int(j) / kNVar, v = int(j) % kNVar;
-        Eigen::Matrix<double_st, 3, NH> hits;
+        Eigen::Matrix<float_st, 3, NH> hits;
         Eigen::Matrix<float_st, 6, NH> hits_ge;
         for (int c = 0; c < NH; ++c) {
           for (int r = 0; r < 3; ++r)
@@ -316,21 +316,21 @@ namespace {
           for (int r = 0; r < 6; ++r)
             hits_ge(r, c) = geIn[6 * NH * t + 6 * c + r];
         }
-        Eigen::Vector<double_st, 4> ff;
+        Eigen::Vector<float_st, 4> ff;
         bld::fastFit(acc, hits, ff);
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-        const double_st bEff = (v == 2) ? static_cast<double_st>(kBzOrigin) : effectiveBField<NH>(acc, hits, ff, kBzOrigin, map);
+        const float_st bEff = (v == 2) ? static_cast<float_st>(kBzOrigin) : effectiveBField<NH>(acc, hits, ff, kBzOrigin, map);
 #pragma GCC diagnostic pop
         const float* fitMap = (v == 0) ? nullptr : map;
-        double_st* mine = scratch + std::size_t(j) * std::size_t(bld::kLegacyFitScratchDoubles<NH>);
+        float_st* mine = scratch + std::size_t(j) * std::size_t(bld::kLegacyFitScratchDoubles<NH>);
         bld::PreparedBrokenLineDataMap<NH, 1> data(mine);
         bld::LegacyFitWorkspaceMap<NH, 1> fitWs(mine + bld::kPreparedDataDoubles<NH>);
         bld::karimaki_circle_fit circle;
         ::riemannFit::LineFit line;
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-        const double_st kBzOrigin_st = static_cast<double_st>(kBzOrigin);
+        const float_st kBzOrigin_st = static_cast<float_st>(kBzOrigin);
 #pragma GCC diagnostic pop
         bld::prepareBrokenLineData(
             acc, hits, ff, bEff, rho, data, fitWs, /*fitCorrections=*/true, /*elossGaps=*/true, fitMap, kBzOrigin_st);
@@ -354,7 +354,7 @@ namespace {
         else if (v == 4)  // and the trajectory is not that circle either, over the lever inside hit 0
           bld::transportToFittedPca(acc, hits, data, bEff, circle, line, fitMap, kBzOrigin_st);
 #pragma GCC diagnostic pop
-        double_st* o = out + std::size_t(j) * kOut;
+        float_st* o = out + std::size_t(j) * kOut;
         o[0] = line.par(0);  // cot(theta)
         o[1] = line.par(1);  // z0 (zip)
         o[2] = line.cov(0, 0);
@@ -368,7 +368,7 @@ namespace {
   };
 
   struct Config {
-    double_st pT, eta;
+    float_st pT, eta;
     int q;
   };
 
@@ -384,8 +384,8 @@ namespace {
     std::vector<Config> cfgs;
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-    for (double_st pT : {1., 3., 10.})
-      for (double_st aeta : {1.0, 1.5, 1.7, 2.3})
+    for (float_st pT : {1., 3., 10.})
+      for (float_st aeta : {1.0, 1.5, 1.7, 2.3})
         for (int zs : {+1, -1})
           for (int q : {+1, -1})
             cfgs.push_back({pT, zs * aeta, q});
@@ -406,8 +406,8 @@ namespace {
     std::vector<Config> pullCfg;
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-    for (double_st pT : {1., 3.})
-      for (double_st aeta : {1.0, 1.5, 2.3})
+    for (float_st pT : {1., 3.})
+      for (float_st aeta : {1.0, 1.5, 2.3})
         for (int zs : {+1, -1})
           pullCfg.push_back({pT, zs * aeta, +1});
 #pragma GCC diagnostic pop
@@ -429,7 +429,7 @@ namespace {
     }
     const int nTracks = int(tracks.size());
 
-    std::vector<double_st> hitsHost(std::size_t(nTracks) * 3 * NH);
+    std::vector<float_st> hitsHost(std::size_t(nTracks) * 3 * NH);
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     std::vector<float_st> geHost(std::size_t(nTracks) * 6 * NH, 0.f);
@@ -444,7 +444,7 @@ namespace {
         g[5] = float(kSigZ * kSigZ);    // zz
       }
 
-    auto hits_h = cms::alpakatools::make_host_buffer<double_st[], Platform>(hitsHost.size());
+    auto hits_h = cms::alpakatools::make_host_buffer<float_st[], Platform>(hitsHost.size());
     std::copy(hitsHost.begin(), hitsHost.end(), hits_h.data());
     auto ge_h = cms::alpakatools::make_host_buffer<float_st[], Platform>(geHost.size());
     std::copy(geHost.begin(), geHost.end(), ge_h.data());
@@ -452,13 +452,13 @@ namespace {
     *rho_h.data() = *rho;
     auto map_h = cms::alpakatools::make_host_buffer<float[], Platform>(blBFieldMap::kNValues);
     std::copy_n(map, blBFieldMap::kNValues, map_h.data());
-    auto out_h = cms::alpakatools::make_host_buffer<double_st[], Platform>(std::size_t(nTracks) * kNVar * kOut);
-    auto hits_d = cms::alpakatools::make_device_buffer<double_st[]>(queue, hitsHost.size());
+    auto out_h = cms::alpakatools::make_host_buffer<float_st[], Platform>(std::size_t(nTracks) * kNVar * kOut);
+    auto hits_d = cms::alpakatools::make_device_buffer<float_st[]>(queue, hitsHost.size());
     auto ge_d = cms::alpakatools::make_device_buffer<float_st[]>(queue, geHost.size());
     auto rho_d = cms::alpakatools::make_device_buffer<blMaterialMap::Map>(queue);
     auto map_d = cms::alpakatools::make_device_buffer<float[]>(queue, blBFieldMap::kNValues);
-    auto out_d = cms::alpakatools::make_device_buffer<double_st[]>(queue, std::size_t(nTracks) * kNVar * kOut);
-    auto scr_d = cms::alpakatools::make_device_buffer<double_st[]>(
+    auto out_d = cms::alpakatools::make_device_buffer<float_st[]>(queue, std::size_t(nTracks) * kNVar * kOut);
+    auto scr_d = cms::alpakatools::make_device_buffer<float_st[]>(
         queue, std::size_t(nTracks) * kNVar * std::size_t(bld::kLegacyFitScratchDoubles<NH>));
     alpaka::memcpy(queue, hits_d, hits_h);
     alpaka::memcpy(queue, ge_d, ge_h);
@@ -476,7 +476,7 @@ namespace {
                         out_d.data());
     alpaka::memcpy(queue, out_h, out_d);
     alpaka::wait(queue);
-    const double_st* out = out_h.data();
+    const float_st* out = out_h.data();
     auto at = [&](int t, int v) { return out + (std::size_t(t) * kNVar + v) * kOut; };
 
     printf("\n== fast-BL field rows, %s, %d hits ==\n", label, NH);
@@ -485,15 +485,15 @@ namespace {
         "  d0 +transport [um] | cot off [1e-4] cot on [1e-4] | pt/true off     on  on(B0) | chi2 off    on\n");
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-    double_st maxZOn = 0., maxCotOn = 0., maxZOff = 0., maxCotOff = 0., maxPtOff = 0., maxPtOn = 0., maxChi2On = 0.;
-    double_st maxZPca = 0., maxZFull = 0., maxD0Pca = 0., maxD0Full = 0.;
+    float_st maxZOn = 0., maxCotOn = 0., maxZOff = 0., maxCotOff = 0., maxPtOff = 0., maxPtOn = 0., maxChi2On = 0.;
+    float_st maxZPca = 0., maxZFull = 0., maxD0Pca = 0., maxD0Full = 0.;
 #pragma GCC diagnostic pop
     for (int t = 0; t < nNoiseless; ++t) {
-      const double_st cotTrue = sinh(kept[t].eta);
-      const double_st z0Off = at(t, 0)[1] * 1e4, z0On = at(t, 1)[1] * 1e4;
-      const double_st z0Pca = at(t, 3)[1] * 1e4, z0Full = at(t, 4)[1] * 1e4;
-      const double_st d0Pca = at(t, 3)[6] * 1e4, d0Full = at(t, 4)[6] * 1e4;
-      const double_st cotOff = (at(t, 0)[0] - cotTrue) * 1e4, cotOn = (at(t, 1)[0] - cotTrue) * 1e4;
+      const float_st cotTrue = sinh(kept[t].eta);
+      const float_st z0Off = at(t, 0)[1] * 1e4, z0On = at(t, 1)[1] * 1e4;
+      const float_st z0Pca = at(t, 3)[1] * 1e4, z0Full = at(t, 4)[1] * 1e4;
+      const float_st d0Pca = at(t, 3)[6] * 1e4, d0Full = at(t, 4)[6] * 1e4;
+      const float_st cotOff = (at(t, 0)[0] - cotTrue) * 1e4, cotOn = (at(t, 1)[0] - cotTrue) * 1e4;
       printf(
           "%5.1f %+4.1f %+d | %11.1f %13.1f %13.1f %19.1f | %12.1f %19.1f | %14.2f %13.2f | %8.4f %6.4f %7.4f |"
           " %8.2f %5.2f\n",
@@ -576,7 +576,7 @@ namespace {
       }
       REQUIRE(tMirror >= 0);
       REQUIRE(tCharge >= 0);
-      const double_st a = at(t, 0)[1], m = at(tMirror, 0)[1], c = at(tCharge, 0)[1];
+      const float_st a = at(t, 0)[1], m = at(tMirror, 0)[1], c = at(tCharge, 0)[1];
       CHECK(a * m < 0.);                           // odd in z
       CHECK(abs(a - c) < 0.3 * abs(a));  // even in charge
     }
@@ -585,20 +585,20 @@ namespace {
     printf("   pulls (%d replicas):  pt  eta |  z0 mean  z0 sigma | cot mean cot sigma\n", kRep);
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-    double_st oddZ = 0., oddC = 0.;
+    float_st oddZ = 0., oddC = 0.;
 #pragma GCC diagnostic pop
     for (std::size_t c = 0; c < pullCfg.size(); ++c) {
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-      double_st sz = 0., szz = 0., sc = 0., scc = 0.;
+      float_st sz = 0., szz = 0., sc = 0., scc = 0.;
 #pragma GCC diagnostic pop
       int nn = 0;
       for (int r = 0; r < kRep; ++r) {
-        const double_st* o = at(pullIndex[c] + r, 4);
+        const float_st* o = at(pullIndex[c] + r, 4);
         if (!(o[3] > 0.) || !(o[2] > 0.))
           continue;
-        const double_st pz = o[1] / sqrt(o[3]);
-        const double_st pc = (o[0] - sinh(pullCfg[c].eta)) / sqrt(o[2]);
+        const float_st pz = o[1] / sqrt(o[3]);
+        const float_st pc = (o[0] - sinh(pullCfg[c].eta)) / sqrt(o[2]);
         sz += pz;
         szz += pz * pz;
         sc += pc;
@@ -606,8 +606,8 @@ namespace {
         ++nn;
       }
       REQUIRE(nn > kRep / 2);
-      const double_st mz = sz / nn, sgz = sqrt(szz / nn - mz * mz);
-      const double_st mc = sc / nn, sgc = sqrt(scc / nn - mc * mc);
+      const float_st mz = sz / nn, sgz = sqrt(szz / nn - mz * mz);
+      const float_st mc = sc / nn, sgc = sqrt(scc / nn - mc * mc);
       printf("                    %5.1f %+4.1f | %8.3f %9.3f | %8.3f %9.3f\n",
              static_cast<double>(pullCfg[c].pT),
              static_cast<double>(pullCfg[c].eta),

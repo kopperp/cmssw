@@ -47,7 +47,7 @@ std::unique_ptr<reco::Track> PixelNtupletsFitter::run(const std::vector<const Tr
   }
 
   assert(nhits == 4);
-  riemannFit::Matrix3xNd<4> hits_gp;
+  riemannFit::Matrix3xNf<4> hits_gp;
   const int hits_gp_digits_in = hits_gp.coeff(0).nb_significant_digit();
 
 #pragma GCC diagnostic push
@@ -62,8 +62,8 @@ std::unique_ptr<reco::Track> PixelNtupletsFitter::run(const std::vector<const Tr
   }
 #pragma GCC diagnostic pop
 
-  HelixFit fittedTrack = useRiemannFit_ ? riemannFit::helixFit(hits_gp, hits_ge, static_cast<double_st>(nominalB_), true)
-                                        : brokenline::helixFit(hits_gp, hits_ge, static_cast<double_st>(nominalB_));
+  HelixFit fittedTrack = useRiemannFit_ ? riemannFit::helixFit(hits_gp, hits_ge, static_cast<float_st>(nominalB_), true)
+                                        : brokenline::helixFit(hits_gp, hits_ge, static_cast<float_st>(nominalB_));
 
   int iCharge = fittedTrack.qCharge;
 

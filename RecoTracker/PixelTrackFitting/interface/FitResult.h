@@ -24,12 +24,26 @@ namespace riemannFit {
   using Matrix5d = Eigen::Matrix<double_st, 5, 5>;
   using Matrix6d = Eigen::Matrix<double_st, 6, 6>;
 
+
+  using Vector2f = Eigen::Vector<float_st, 2>;
+  using Vector3f = Eigen::Vector<float_st, 3>;
+  using Vector4f = Eigen::Vector<float_st, 4>;
+  using Vector5f = Eigen::Matrix<float_st, 5, 1>;
+  using Matrix2f = Eigen::Matrix<float_st, 2, 2>;
+  using Matrix3f = Eigen::Matrix<float_st, 3, 3>;
+  using Matrix4f = Eigen::Matrix<float_st, 4, 4>;
+  using Matrix5f = Eigen::Matrix<float_st, 5, 5>;
+  using Matrix6f = Eigen::Matrix<float_st, 6, 6>;
+
   template <int N>
   using Matrix3xNd = Eigen::Matrix<double_st, 3, N>;  // used for inputs hits
 
+  template <int N>
+  using Matrix3xNf = Eigen::Matrix<float_st, 3, N>;  // used for inputs hits
+
   struct CircleFit {
-    Vector3d par;  //!< parameter: (X0,Y0,R)
-    Matrix3d cov;
+    Vector3f par;  //!< parameter: (X0,Y0,R)
+    Matrix3f cov;
     /*!< covariance matrix: \n
       |cov(X0,X0)|cov(Y0,X0)|cov( R,X0)| \n
       |cov(X0,Y0)|cov(Y0,Y0)|cov( R,Y0)| \n
@@ -40,8 +54,8 @@ namespace riemannFit {
   };
 
   struct LineFit {
-    Vector2d par;  //!<(cotan(theta),Zip)
-    Matrix2d cov;
+    Vector2f par;  //!<(cotan(theta),Zip)
+    Matrix2f cov;
     /*!<
       |cov(c_t,c_t)|cov(Zip,c_t)| \n
       |cov(c_t,Zip)|cov(Zip,Zip)|
@@ -50,8 +64,8 @@ namespace riemannFit {
   };
 
   struct HelixFit {
-    Vector5d par;  //!<(phi,Tip,pt,cotan(theta)),Zip)
-    Matrix5d cov;
+    Vector5f par;  //!<(phi,Tip,pt,cotan(theta)),Zip)
+    Matrix5f cov;
     /*!< ()->cov() \n
       |(phi,phi)|(Tip,phi)|(p_t,phi)|(c_t,phi)|(Zip,phi)| \n
       |(phi,Tip)|(Tip,Tip)|(p_t,Tip)|(c_t,Tip)|(Zip,Tip)| \n

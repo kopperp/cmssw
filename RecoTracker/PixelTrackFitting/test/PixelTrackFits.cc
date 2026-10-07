@@ -24,19 +24,22 @@ using namespace riemannFit;
 using std::unique_ptr;
 
 using Vector5d = Eigen::Vector<double_st, 5>;
+using Vector5f = Eigen::Vector<float_st, 5>;
 
 namespace riemannFit {
   using Vector3i = Eigen::Matrix<int, 3, 1>;
   using Vector4i = Eigen::Matrix<int, 4, 1>;
   using Vector6d = Eigen::Matrix<double_st, 6, 1>;
   using Vector8d = Eigen::Matrix<double_st, 8, 1>;
+  using Vector6f = Eigen::Matrix<float_st, 6, 1>;
+  using Vector8f = Eigen::Matrix<float_st, 8, 1>;
 };  // namespace riemannFit
 
 // quadruplets...
 struct hits_gen {
-  Matrix3xNd<4> hits;
+  Matrix3xNf<4> hits;
   Eigen::Matrix<float_st, 6, 4> hits_ge;
-  Eigen::Vector<double_st, 5> true_par;
+  Eigen::Vector<float_st, 5> true_par;
 };
 
 struct geometry {
@@ -59,7 +62,7 @@ constexpr int c_speed = 299792458;
 constexpr double pi = M_PI;
 default_random_engine generator(1);
 
-void smearing(const Vector5d& err, const bool& isbarrel, double_st& x, double_st& y, double_st& z) {
+void smearing(const Vector5f& err, const bool& isbarrel, float_st& x, float_st& y, float_st& z) {
   normal_distribution<double> dist_R(0., err[0]);
   normal_distribution<double> dist_Rp(0., err[1]);
   normal_distribution<double> dist_z(0., err[2]);
@@ -83,8 +86,8 @@ template <int N>
 void Hits_cov(Eigen::Matrix<float_st, 6, 4>& V,
               const unsigned int& i,
               const unsigned int& n,
-              const Matrix3xNd<N>& hits,
-              const Vector5d& err,
+              const Matrix3xNf<N>& hits,
+              const Vector5f& err,
               bool isbarrel) {
   if (isbarrel) {
     double R2 = riemannFit::sqr(hits(0, i)) + riemannFit::sqr(hits(1, i));
@@ -103,9 +106,9 @@ void Hits_cov(Eigen::Matrix<float_st, 6, 4>& V,
   }
 }
 
-hits_gen Hits_gen(const unsigned int& n, const Matrix<double_st, 6, 1>& gen_par) {
+hits_gen Hits_gen(const unsigned int& n, const Matrix<float_st, 6, 1>& gen_par) {
   hits_gen gen;
-  gen.hits = Eigen::Matrix<double_st, Eigen::Dynamic, Eigen::Dynamic>::Zero(3, n);
+  gen.hits = Eigen::Matrix<float_st, Eigen::Dynamic, Eigen::Dynamic>::Zero(3, n);
   gen.hits_ge = Eigen::Matrix<float_st, 6, 4>::Zero();
   // err /= 10000.;
   constexpr double rad[8] = {2.95, 6.8, 10.9, 16., 3.1, 7., 11., 16.2};
@@ -119,19 +122,19 @@ hits_gen Hits_gen(const unsigned int& n, const Matrix<double_st, 6, 1>& gen_par)
       35. / 10000, 18. / 10000, 15. / 10000, 34. / 10000, 35. / 10000, 18. / 10000, 15. / 10000, 34. / 10000};
   constexpr double z_err[8] = {
       72. / 10000, 38. / 10000, 25. / 10000, 56. / 10000, 72. / 10000, 38. / 10000, 25. / 10000, 56. / 10000};
-  const double_st x2 = gen_par(0) + gen_par(4) * cos(gen_par(3) * pi / 180);
-  const double_st y2 = gen_par(1) + gen_par(4) * sin(gen_par(3) * pi / 180);
-  const double_st alpha = atan2(y2, x2);
+  const float_st x2 = gen_par(0) + gen_par(4) * cos(gen_par(3) * pi / 180);
+  const float_st y2 = gen_par(1) + gen_par(4) * sin(gen_par(3) * pi / 180);
+  const float_st alpha = atan2(y2, x2);
 
   for (unsigned int i = 0; i < n; ++i) {
-    const double_st a = gen_par(4);
+    const float_st a = gen_par(4);
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-    const double_st b = rad[i];
+    const float_st b = rad[i];
 #pragma GCC diagnostic pop
-    const double_st c = sqrt(riemannFit::sqr(x2) + riemannFit::sqr(y2));
-    const double_st beta = acos((riemannFit::sqr(a) - riemannFit::sqr(b) - riemannFit::sqr(c)) / (-2. * b * c));
-    const double_st gamma = alpha + beta;
+    const float_st c = sqrt(riemannFit::sqr(x2) + riemannFit::sqr(y2));
+    const float_st beta = acos((riemannFit::sqr(a) - riemannFit::sqr(b) - riemannFit::sqr(c)) / (-2. * b * c));
+    const float_st gamma = alpha + beta;
     gen.hits(0, i) = rad[i] * cos(gamma);
     gen.hits(1, i) = rad[i] * sin(gamma);
     gen.hits(2, i) =
@@ -141,7 +144,7 @@ hits_gen Hits_gen(const unsigned int& n, const Matrix<double_st, 6, 1>& gen_par)
                  (2. * gen_par(4))) *
             gen_par(4);
     // isbarrel(i) = ??
-    Vector5d err;
+    Vector5f err;
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     err << R_err[i], Rp_err[i], z_err[i], 0, 0;
@@ -153,10 +156,10 @@ hits_gen Hits_gen(const unsigned int& n, const Matrix<double_st, 6, 1>& gen_par)
   return gen;
 }
 
-Vector5d True_par(const Matrix<double_st, 6, 1>& gen_par, const int& charge, const double_st& B_field) {
-  Vector5d true_par;
-  const double_st x0 = gen_par(0) + gen_par(4) * cos(gen_par(3) * pi / 180);
-  const double_st y0 = gen_par(1) + gen_par(4) * sin(gen_par(3) * pi / 180);
+Vector5f True_par(const Matrix<float_st, 6, 1>& gen_par, const int& charge, const float_st& B_field) {
+  Vector5f true_par;
+  const float_st x0 = gen_par(0) + gen_par(4) * cos(gen_par(3) * pi / 180);
+  const float_st y0 = gen_par(1) + gen_par(4) * sin(gen_par(3) * pi / 180);
   CircleFit circle;
   circle.par << x0, y0, gen_par(4);
   circle.qCharge = 1;
@@ -176,8 +179,8 @@ Vector5d True_par(const Matrix<double_st, 6, 1>& gen_par, const int& charge, con
   return true_par;
 }
 
-Matrix<double_st, 6, 1> New_par(const Matrix<double_st, 6, 1>& gen_par, const int& charge, const double_st& B_field) {
-  Matrix<double_st, 6, 1> new_par;
+Matrix<float_st, 6, 1> New_par(const Matrix<float_st, 6, 1>& gen_par, const int& charge, const float_st& B_field) {
+  Matrix<float_st, 6, 1> new_par;
   new_par.block(0, 0, 3, 1) = gen_par.block(0, 0, 3, 1);
   new_par(3) = gen_par(3) - charge * 90;
   new_par(4) = gen_par(4) / B_field;
@@ -187,8 +190,8 @@ Matrix<double_st, 6, 1> New_par(const Matrix<double_st, 6, 1>& gen_par, const in
 }
 
 template <typename Fit, size_t N>
-void computePull(std::array<Fit, N>& fit, const char* label, int n_, int iteration, const Vector5d& true_par) {
-  Eigen::Matrix<double_st, 41, Eigen::Dynamic, 1> score(41, iteration);
+void computePull(std::array<Fit, N>& fit, const char* label, int n_, int iteration, const Vector5f& true_par) {
+  Eigen::Matrix<float_st, 41, Eigen::Dynamic, 1> score(41, iteration);
 
   std::string histo_name("Phi Pull");
   histo_name += label;
@@ -278,11 +281,11 @@ void computePull(std::array<Fit, N>& fit, const char* label, int n_, int iterati
     score(39, x) = sqrt(fit[x].cov(4, 4));
   }
 
-  double_st phi_ = score.row(0).mean();
-  double_st a_ = score.row(1).mean();
-  double_st pt_ = score.row(2).mean();
-  double_st coT_ = score.row(3).mean();
-  double_st Zip_ = score.row(4).mean();
+  float_st phi_ = score.row(0).mean();
+  float_st a_ = score.row(1).mean();
+  float_st pt_ = score.row(2).mean();
+  float_st coT_ = score.row(3).mean();
+  float_st Zip_ = score.row(4).mean();
   std::cout << std::setprecision(5) << std::scientific << label << " AVERAGE FITTED VALUES: \n"
             << "phi: " << score.row(30).mean() << " +/- " << score.row(35).mean() << " [+/-] "
             << sqrt(score.row(35).array().abs2().mean() - score.row(35).mean() * score.row(35).mean()) << std::endl
@@ -295,7 +298,7 @@ void computePull(std::array<Fit, N>& fit, const char* label, int n_, int iterati
             << "Zip: " << score.row(34).mean() << " +/- " << score.row(39).mean() << " [+/-] "
             << sqrt(score.row(39).array().abs2().mean() - score.row(39).mean() * score.row(39).mean()) << std::endl;
 
-  Matrix5d correlation;
+  Matrix5f correlation;
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
   correlation << 1., score.row(21).mean(), score.row(22).mean(), score.row(15).mean(), score.row(20).mean(),
@@ -348,10 +351,10 @@ void test_helix_fit(bool getcin) {
   int n_;
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-  const double_st B_field = 3.8 * c_speed / pow(10, 9) / 100;
+  const float_st B_field = 3.8 * c_speed / pow(10, 9) / 100;
 #pragma GCC diagnostic pop
-  Matrix<double_st, 6, 1> gen_par;
-  Vector5d true_par;
+  Matrix<float_st, 6, 1> gen_par;
+  Vector5f true_par;
   generator.seed(1);
   std::cout << std::setprecision(6);
   cout << "_________________________________________________________________________\n";
@@ -397,8 +400,8 @@ void test_helix_fit(bool getcin) {
   for (int i = 0; i < 100 * iteration; i++) {
     hits_gen gen;
     gen = Hits_gen(n_, gen_par);
-    //      gen.hits = MatrixXd::Zero(3, 4);
-    //      gen.hits_cov = MatrixXd::Zero(3 * 4, 3 * 4);
+    //      gen.hits = MatrixXf::Zero(3, 4);
+    //      gen.hits_cov = MatrixXf::Zero(3 * 4, 3 * 4);
     //      gen.hits.col(0) << 1.82917642593, 2.0411875248, 7.18495464325;
     //      gen.hits.col(1) << 4.47041416168, 4.82704305649, 18.6394691467;
     //      gen.hits.col(2) << 7.25991010666, 7.74653434753, 30.6931324005;
