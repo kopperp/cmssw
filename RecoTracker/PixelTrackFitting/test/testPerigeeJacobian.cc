@@ -29,19 +29,21 @@
 
 using riemannFit::Matrix5d;
 using riemannFit::Vector5d;
+using riemannFit::Matrix5f;
+using riemannFit::Vector5f;
 
 namespace {
 
-  using Vec3 = std::array<double, 3>;
+  using Vec3 = std::array<float, 3>;
 
-  double dot(Vec3 const& a, Vec3 const& b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
+  float dot(Vec3 const& a, Vec3 const& b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
 
   struct Frame {
     Vec3 org, xh, yh, zh;
   };
 
-  // The plane of the converters, in double precision, cross-checked against the Plane they build.
-  Frame makeFrame(double phi0, GlobalPoint const& beamSpot, double& worstFrame) {
+  // The plane of the converters, in float precision, cross-checked against the Plane they build.
+  Frame makeFrame(float phi0, GlobalPoint const& beamSpot, float& worstFrame) {
     float sp = std::sin(phi0);
     float cp = std::cos(phi0);
     Surface::RotationType rot(sp, -cp, 0, 0, 0, -1.f, cp, sp, 0);
@@ -65,33 +67,33 @@ namespace {
                           r.zy() - f.zh[1],
                           r.zz() - f.zh[2]};
     for (double v : d)
-      worstFrame = std::max(worstFrame, std::abs(v));
+      worstFrame = std::max(worstFrame, std::abs(static_cast<float>(v)));
     return f;
   }
 
   // Local parameters of the trajectory of the SoA state `ip` on the fixed plane `f`.
-  Vector5d localOnPlane(Vector5d const& ip, Frame const& f) {
-    const double phi = ip(0), tip = ip(1), qOverPt = ip(2), cot = ip(3), zip = ip(4);
-    const double sinTheta = 1. / std::sqrt(1. + cot * cot);
-    const double pt = 1. / std::abs(qOverPt);
+  Vector5f localOnPlane(Vector5f const& ip, Frame const& f) {
+    const float phi = ip(0), tip = ip(1), qOverPt = ip(2), cot = ip(3), zip = ip(4);
+    const float sinTheta = 1. / std::sqrt(1. + cot * cot);
+    const float pt = 1. / std::abs(qOverPt);
     // The state as the converter hands it to the geometry: PCA and momentum, beam-spot relative.
     const Vec3 pos{f.org[0] + tip * std::sin(phi), f.org[1] - tip * std::cos(phi), f.org[2] + zip};
     const Vec3 mom{pt * std::cos(phi), pt * std::sin(phi), pt * cot};
     Vec3 d{pos[0] - f.org[0], pos[1] - f.org[1], pos[2] - f.org[2]};
-    const double lz = dot(d, f.zh), pz = dot(mom, f.zh);
-    const double s = -lz / pz;  // straight line to the plane; exact to first order (see above)
+    const float lz = dot(d, f.zh), pz = dot(mom, f.zh);
+    const float s = -lz / pz;  // straight line to the plane; exact to first order (see above)
     Vec3 x{d[0] + s * mom[0], d[1] + s * mom[1], d[2] + s * mom[2]};
-    Vector5d op;
+    Vector5f op;
     op << qOverPt * sinTheta, dot(mom, f.xh) / pz, dot(mom, f.yh) / pz, dot(x, f.xh), dot(x, f.yh);
     return op;
   }
 
   // The Jacobian the code under test applies, written out here to be checked entry by entry.
-  Matrix5d codeJacobian(Vector5d const& ip) {
+  Matrix5f codeJacobian(Vector5f const& ip) {
     const double sinTheta2 = 1. / (1. + ip(3) * ip(3));
     const double sinTheta = std::sqrt(sinTheta2);
     const double cosTheta = ip(3) * sinTheta;
-    Matrix5d jMat = Matrix5d::Zero();
+    Matrix5f jMat = Matrix5f::Zero();
     jMat(0, 2) = sinTheta;
     jMat(0, 3) = -sinTheta2 * cosTheta * ip(2);
     jMat(1, 0) = -1.;
@@ -102,8 +104,8 @@ namespace {
     return jMat;
   }
 
-  Matrix5d loadCov(Vector5d const& e) {
-    Matrix5d cov = Matrix5d::Zero();
+  Matrix5f loadCov(Vector5f const& e) {
+    Matrix5f cov = Matrix5f::Zero();
     for (int i = 0; i < 5; ++i)
       cov(i, i) = e(i) * e(i);
     for (int i = 0; i < 5; ++i)
@@ -118,46 +120,46 @@ namespace {
 
 int main() {
   const GlobalPoint beamSpot(0.08f, -0.03f, 1.7f);
-  const double tol = 1e-6;
+  const float tol = 1e-6;
 
-  double worstJac = 0., worstVal = 0., worstCov = 0., worstFrame = 0.;
+  float worstJac = 0., worstVal = 0., worstCov = 0., worstFrame = 0.;
   int worstRow = -1, worstCol = -1;
   long nStates = 0;
 
-  for (double phi : {-2.9, -1.2, 0., 0.7, 1.9, 3.0})
-    for (double tip : {-5., -1.3, -0.05, 0., 0.05, 1.3, 5.})
-      for (double pt : {0.5, 1., 5., 20.})
+  for (float phi : {-2.9, -1.2, 0., 0.7, 1.9, 3.0})
+    for (float tip : {-5., -1.3, -0.05, 0., 0.05, 1.3, 5.})
+      for (float pt : {0.5, 1., 5., 20.})
         for (int charge : {-1, 1})
-          for (double cot : {-3., -1.4, -0.3, 0., 0.3, 1.4, 3.})
-            for (double zip : {-12., 0., 12.}) {
-              Vector5d ip;
+          for (float cot : {-3., -1.4, -0.3, 0., 0.3, 1.4, 3.})
+            for (float zip : {-12., 0., 12.}) {
+              Vector5f ip;
               ip << phi, tip, charge / pt, cot, zip;
               ++nStates;
 
               const Frame f = makeFrame(phi, beamSpot, worstFrame);
 
               // 1. the values: what the code publishes must be the parameters on that plane.
-              Vector5d op;
-              Matrix5d ocov;
-              const Matrix5d icov = loadCov((Vector5d() << 2e-3, 2e-2, 0.02 * std::abs(ip(2)), 5e-3, 5e-2).finished());
+              Vector5f op;
+              Matrix5f ocov;
+              const Matrix5f icov = loadCov((Vector5f() << 2e-3, 2e-2, 0.02 * abs(ip(2)), 5e-3, 5e-2).finished());
               riemannFit::transformToPerigeePlane(ip, icov, op, ocov);
-              const Vector5d truth = localOnPlane(ip, f);
+              const Vector5f truth = localOnPlane(ip, f);
               for (int i = 0; i < 5; ++i)
                 worstVal = std::max(worstVal, std::abs(op(i) - truth(i)));
 
               // 2. every entry of the Jacobian, by central finite differences of the same map.
-              const Matrix5d jCode = codeJacobian(ip);
-              Matrix5d jNum;
+              const Matrix5f jCode = codeJacobian(ip);
+              Matrix5f jNum;
               for (int j = 0; j < 5; ++j) {
-                const double h = 1e-6 * std::max(1., std::abs(ip(j)));
-                Vector5d pp = ip, pm = ip;
+                const float h = static_cast<float>(1e-6) * std::max(static_cast<float>(1.), std::abs(ip(j)));
+                Vector5f pp = ip, pm = ip;
                 pp(j) += h;
                 pm(j) -= h;
                 jNum.col(j) = (localOnPlane(pp, f) - localOnPlane(pm, f)) / (2. * h);
               }
               for (int i = 0; i < 5; ++i)
                 for (int j = 0; j < 5; ++j) {
-                  const double d = std::abs(jNum(i, j) - jCode(i, j));
+                  const float d = std::abs(jNum(i, j) - jCode(i, j));
                   if (d > worstJac) {
                     worstJac = d;
                     worstRow = i;
@@ -166,12 +168,12 @@ int main() {
                 }
 
               // 3. the covariance the code returns must be that Jacobian's similarity transform.
-              const Matrix5d expected = jCode * icov * jCode.transpose();
+              const Matrix5f expected = jCode * icov * jCode.transpose();
               for (int i = 0; i < 5; ++i)
                 for (int j = 0; j < 5; ++j)
                   worstCov = std::max(
                       worstCov,
-                      std::abs(ocov(i, j) - expected(i, j)) / std::sqrt(expected(i, i) * expected(j, j) + 1e-300));
+                      std::abs(ocov(i, j) - expected(i, j)) / std::sqrt(expected(i, i) * expected(j, j) + static_cast<float>(1e-300)));
             }
 
   std::printf("testPerigeeJacobian: %ld states\n", nStates);

@@ -50,6 +50,17 @@ namespace riemannFit {
   using Map4dS = Eigen::Map<Vector4d, 0, Eigen::InnerStride<S> >;
   using Map4d = Map4dS<stride>;
 
+  template <int N>
+  using Matrix3xNf = Eigen::Matrix<float, 3, N>;
+  template <int N, uint32_t S = stride>
+  using Map3xNfS = Eigen::Map<Matrix3xNf<N>, 0, Eigen::Stride<3 * S, S> >;
+  template <int N>
+  using Map3xNf = Map3xNfS<N, stride>;
+  // fast fit
+  template <uint32_t S = stride>
+  using Map4fS = Eigen::Map<Vector4f, 0, Eigen::InnerStride<S> >;
+  using Map4f = Map4fS<stride>;
+
   template <auto Start, auto End, auto Inc, class F>  //a compile-time bounded for loop
   constexpr void rolling_fits(F &&f) {
     if constexpr (Start < End) {

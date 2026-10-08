@@ -45,7 +45,7 @@ std::unique_ptr<reco::Track> PixelNtupletsFitter::run(const std::vector<const Tr
   }
 
   assert(nhits == 4);
-  riemannFit::Matrix3xNd<4> hits_gp;
+  riemannFit::Matrix3xNf<4> hits_gp;
 
   Eigen::Matrix<float, 6, 4> hits_ge = Eigen::Matrix<float, 6, 4>::Zero();
 

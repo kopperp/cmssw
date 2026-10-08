@@ -120,7 +120,7 @@ int main() {
 
   std::cout << "del1^2 " << (del1.array()*del1.array()).transpose() << std::endl;
   std::cout << std::endl;
-  
+
   std::cout << "cov0\n" << cov0 << std::endl;
   std::cout << "cov1\n" << cov1 << std::endl;
   std::cout << "cov2\n" << cov2 << std::endl;

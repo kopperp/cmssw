@@ -41,12 +41,48 @@ namespace riemannFit {
   template <int N>
   using RowVector2Nd = Eigen::Matrix<double, 1, 2 * N>;
 
+  using VectorXf = Eigen::VectorXf;
+  using MatrixXf = Eigen::MatrixXf;
+  template <int N>
+  using MatrixNf = Eigen::Matrix<float, N, N>;
+  template <int N>
+  using MatrixNplusONEf = Eigen::Matrix<float, N + 1, N + 1>;
+  template <int N>
+  using ArrayNf = Eigen::Array<float, N, N>;
+  template <int N>
+  using Matrix2Nf = Eigen::Matrix<float, 2 * N, 2 * N>;
+  template <int N>
+  using Matrix3Nf = Eigen::Matrix<float, 3 * N, 3 * N>;
+  template <int N>
+  using Matrix2xNf = Eigen::Matrix<float, 2, N>;
+  template <int N>
+  using Matrix2xNf = Eigen::Matrix<float, 2, N>;
+  template <int N>
+  using Array2xNf = Eigen::Array<float, 2, N>;
+  template <int N>
+  using MatrixNx3f = Eigen::Matrix<float, N, 3>;
+  template <int N>
+  using MatrixNx5f = Eigen::Matrix<float, N, 5>;
+  template <int N>
+  using VectorNf = Eigen::Matrix<float, N, 1>;
+  template <int N>
+  using VectorNplusONEf = Eigen::Matrix<float, N + 1, 1>;
+  template <int N>
+  using Vector2Nf = Eigen::Matrix<float, 2 * N, 1>;
+  template <int N>
+  using Vector3Nf = Eigen::Matrix<float, 3 * N, 1>;
+  template <int N>
+  using RowVectorNf = Eigen::Matrix<float, 1, 1, N>;
+  template <int N>
+  using RowVector2Nf = Eigen::Matrix<float, 1, 2 * N>;
+
+  using Matrix2x3f = Eigen::Matrix<float, 2, 3>;
   using Matrix2x3d = Eigen::Matrix<double, 2, 3>;
 
   using Matrix3f = Eigen::Matrix3f;
   using Vector3f = Eigen::Vector3f;
   using Vector4f = Eigen::Vector4f;
-  using Vector6f = Eigen::Matrix<double, 6, 1>;
+  using Vector6f = Eigen::Matrix<float, 6, 1>;
 
   template <class C>
   void printIt(C* m, const char* prefix = "") {
@@ -68,21 +104,22 @@ namespace riemannFit {
   }
 
   /*!
-    \brief Compute cross product of two 2D vector (assuming z component 0),
+    \brief Compute cross product of two 2f vector (assuming z component 0),
     returning z component of the result.
-    \param a first 2D vector in the product.
-    \param b second 2D vector in the product.
+    \param a first 2f vector in the product.
+    \param b second 2f vector in the product.
     \return z component of the cross product.
   */
 
   inline double cross2D(const Vector2d& a, const Vector2d& b) { return a.x() * b.y() - a.y() * b.x(); }
+  inline float  cross2D(const Vector2f& a, const Vector2f& b) { return a.x() * b.y() - a.y() * b.x(); }
 
   /*!
    *  load error in CMSSW format to our formalism
-   *  
+   *
    */
-  template <typename M6xNf, typename M2Nd>
-  void loadCovariance2D(M6xNf const& ge, M2Nd& hits_cov) {
+  template <typename M6xNf, typename M2Nf>
+  void loadCovariance2D(M6xNf const& ge, M2Nf& hits_cov) {
     // Index numerology:
     // i: index of the hits/point (0,..,3)
     // j: index of space component (x,y,z)
@@ -113,8 +150,8 @@ namespace riemannFit {
     }
   }
 
-  template <typename M6xNf, typename M3xNd>
-  void loadCovariance(M6xNf const& ge, M3xNd& hits_cov) {
+  template <typename M6xNf, typename M3xNf>
+  void loadCovariance(M6xNf const& ge, M3xNf& hits_cov) {
     // Index numerology:
     // i: index of the hits/point (0,..,3)
     // j: index of space component (x,y,z)
@@ -167,16 +204,16 @@ namespace riemannFit {
     \param B magnetic field in Gev/cm/c unit.
     \param error flag for errors computation.
   */
-  inline void par_uvrtopak(CircleFit& circle, const double B, const bool error) {
-    Vector3d par_pak;
-    const double temp0 = circle.par.head(2).squaredNorm();
-    const double temp1 = sqrt(temp0);
+  inline void par_uvrtopak(CircleFit& circle, const float B, const bool error) {
+    Vector3f par_pak;
+    const float temp0 = circle.par.head(2).squaredNorm();
+    const float temp1 = sqrt(temp0);
     par_pak << atan2(circle.qCharge * circle.par(0), -circle.qCharge * circle.par(1)),
         circle.qCharge * (temp1 - circle.par(2)), circle.par(2) * B;
     if (error) {
-      const double temp2 = sqr(circle.par(0)) * 1. / temp0;
-      const double temp3 = 1. / temp1 * circle.qCharge;
-      Matrix3d j4Mat;
+      const float temp2 = sqr(circle.par(0)) * 1. / temp0;
+      const float temp3 = 1. / temp1 * circle.qCharge;
+      Matrix3f j4Mat;
       j4Mat << -circle.par(1) * temp2 * 1. / sqr(circle.par(0)), temp2 * 1. / circle.par(0), 0., circle.par(0) * temp3,
           circle.par(1) * temp3, -circle.qCharge, 0., 0., B;
       circle.cov = j4Mat * circle.cov * j4Mat.transpose();
@@ -191,15 +228,15 @@ namespace riemannFit {
     be transformed and particle charge.
   */
   inline void fromCircleToPerigee(CircleFit& circle) {
-    Vector3d par_pak;
-    const double temp0 = circle.par.head(2).squaredNorm();
-    const double temp1 = sqrt(temp0);
+    Vector3f par_pak;
+    const float temp0 = circle.par.head(2).squaredNorm();
+    const float temp1 = sqrt(temp0);
     par_pak << atan2(circle.qCharge * circle.par(0), -circle.qCharge * circle.par(1)),
         circle.qCharge * (temp1 - circle.par(2)), circle.qCharge / circle.par(2);
 
-    const double temp2 = sqr(circle.par(0)) * 1. / temp0;
-    const double temp3 = 1. / temp1 * circle.qCharge;
-    Matrix3d j4Mat;
+    const float temp2 = sqr(circle.par(0)) * 1. / temp0;
+    const float temp3 = 1. / temp1 * circle.qCharge;
+    Matrix3f j4Mat;
     j4Mat << -circle.par(1) * temp2 * 1. / sqr(circle.par(0)), temp2 * 1. / circle.par(0), 0., circle.par(0) * temp3,
         circle.par(1) * temp3, -circle.qCharge, 0., 0., -circle.qCharge / (circle.par(2) * circle.par(2));
     circle.cov = j4Mat * circle.cov * j4Mat.transpose();
@@ -223,7 +260,7 @@ namespace riemannFit {
     op(3) = ip(1);
     op(4) = -ip(4);
 
-    Matrix5d jMat = Matrix5d::Zero();
+    MO5 jMat = MO5::Zero();
 
     jMat(0, 2) = sinTheta;
     jMat(0, 3) = -sinTheta2 * cosTheta * ip(2);

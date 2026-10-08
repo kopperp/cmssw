@@ -21,6 +21,10 @@ namespace riemannFit {
   using Matrix3xNd = Eigen::Matrix<double, 3, N>;
   template <int N>
   using Map3xNd = Eigen::Map<Matrix3xNd<N>, 0, Eigen::Stride<3 * stride(), stride()> >;
+  template <int N>
+  using Matrix3xNf = Eigen::Matrix<float, 3, N>;
+  template <int N>
+  using Map3xNf = Eigen::Map<Matrix3xNf<N>, 0, Eigen::Stride<3 * stride(), stride()> >;
   // errors
   template <int N>
   using Matrix6xNf = Eigen::Matrix<float, 6, N>;
@@ -89,7 +93,7 @@ void fillHitsAndHitsCov(M3xN& hits, M6xN& hits_ge) {
 template <int N>
 void testFit() {
   constexpr double B = 0.0113921;
-  riemannFit::Matrix3xNd<N> hits;
+  riemannFit::Matrix3xNf<N> hits;
   riemannFit::Matrix6xNf<N> hits_ge = MatrixXf::Zero(6, N);
 
   fillHitsAndHitsCov(hits, hits_ge);
@@ -101,10 +105,10 @@ void testFit() {
 
   // FAST_FIT_CPU
 #ifdef USE_BL
-  Vector4d fast_fit_results;
+  Vector4f fast_fit_results;
   brokenline::fastFit(hits, fast_fit_results);
 #else
-  Vector4d fast_fit_results;
+  Vector4f fast_fit_results;
   riemannFit::fastFit(hits, fast_fit_results);
 #endif
   std::cout << "Fitted values (FastFit, [X0, Y0, R, tan(theta)]):\n" << fast_fit_results << std::endl;
@@ -114,7 +118,7 @@ void testFit() {
 #ifdef USE_BL
   brokenline::PreparedBrokenLineData<N> data;
   brokenline::karimaki_circle_fit circle_fit_results;
-  riemannFit::Matrix3d Jacob;
+  riemannFit::Matrix3f Jacob;
 
   brokenline::prepareBrokenLineData(hits, fast_fit_results, B, data);
   riemannFit::LineFit line_fit_results;
@@ -125,8 +129,8 @@ void testFit() {
   circle_fit_results.par(2) = B / std::abs(circle_fit_results.par(2));
   circle_fit_results.cov = Jacob * circle_fit_results.cov * Jacob.transpose();
 #else
-  riemannFit::VectorNd<N> rad = (hits.block(0, 0, 2, N).colwise().norm());
-  riemannFit::Matrix2Nd<N> hits_cov = riemannFit::Matrix2Nd<N>::Zero();
+  riemannFit::VectorNf<N> rad = (hits.block(0, 0, 2, N).colwise().norm());
+  riemannFit::Matrix2Nf<N> hits_cov = riemannFit::Matrix2Nf<N>::Zero();
   riemannFit::loadCovariance2D(hits_ge, hits_cov);
   riemannFit::CircleFit circle_fit_results =
       riemannFit::circleFit(hits.block(0, 0, 2, N), hits_cov, fast_fit_results, rad, B, true);

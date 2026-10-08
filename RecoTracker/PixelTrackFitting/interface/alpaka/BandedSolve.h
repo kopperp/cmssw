@@ -16,19 +16,19 @@
 namespace ALPAKA_ACCELERATOR_NAMESPACE::generalBrokenLine {
 
   template <int kBand>
-  ALPAKA_FN_ACC ALPAKA_FN_INLINE void bandFactor(double* Mb, int n, int lstride = 1) {
+  ALPAKA_FN_ACC ALPAKA_FN_INLINE void bandFactor(float* Mb, int n, int lstride = 1) {
     const int rstride = (kBand + 1) * lstride;  // physical stride between packed rows
     for (int j = 0; j < n; ++j) {
-      double* Mj = Mb + j * rstride;
-      double Dj = Mj[0];
+      float* Mj = Mb + j * rstride;
+      float Dj = Mj[0];
       const int pmax = (j < kBand) ? j : kBand;
       for (int p = 1; p <= pmax; ++p)
         Dj -= Mj[p * lstride] * Mj[p * lstride] * Mb[(j - p) * rstride];
       Mj[0] = Dj;
       const int imax = (j + kBand < n - 1) ? (j + kBand) : (n - 1);
       for (int i = j + 1; i <= imax; ++i) {
-        double* Mi = Mb + i * rstride;
-        double sum = Mi[(i - j) * lstride];  // A(i, j)
+        float* Mi = Mb + i * rstride;
+        float sum = Mi[(i - j) * lstride];  // A(i, j)
         const int kmin = (i - kBand > 0) ? (i - kBand) : 0;
         for (int k = kmin; k < j; ++k)
           sum -= Mi[(i - k) * lstride] * Mj[(j - k) * lstride] * Mb[k * rstride];
@@ -43,12 +43,12 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::generalBrokenLine {
   // full solve.
   template <int kBand>
   ALPAKA_FN_ACC ALPAKA_FN_INLINE void bandSolveInPlace(
-      const double* Mb, double* x, int n, int lstride = 1, int iFirst = 0, int iStop = 0) {
+      const float* Mb, float* x, int n, int lstride = 1, int iFirst = 0, int iStop = 0) {
     const int rstride = (kBand + 1) * lstride;  // physical stride between packed rows
     for (int i = iFirst; i < n; ++i) {          // forward: L y = rhs
-      const double* Mi = Mb + i * rstride;
+      const float* Mi = Mb + i * rstride;
       const int pmax = (i < kBand) ? i : kBand;
-      double si = x[i * lstride];
+      float si = x[i * lstride];
       for (int p = 1; p <= pmax; ++p)
         si -= Mi[p * lstride] * x[(i - p) * lstride];
       x[i * lstride] = si;
@@ -58,7 +58,7 @@ namespace ALPAKA_ACCELERATOR_NAMESPACE::generalBrokenLine {
       x[i * lstride] /= Mb[i * rstride];
     for (int i = n - 1; i >= iStop; --i) {  // back: L^T x = z
       const int kmax = (i + kBand < n - 1) ? (i + kBand) : (n - 1);
-      double si = x[i * lstride];
+      float si = x[i * lstride];
       for (int k = i + 1; k <= kmax; ++k)
         si -= Mb[k * rstride + (k - i) * lstride] * x[k * lstride];
       x[i * lstride] = si;
